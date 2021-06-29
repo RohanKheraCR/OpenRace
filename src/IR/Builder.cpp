@@ -13,8 +13,7 @@ limitations under the License.
 
 #include <llvm/Analysis/PostDominators.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
-#include <llvm/IR/Dominators.h>
-#include <llvm/IR/Instructions.h>
+#include <llvm/Support/CommandLine.h>
 
 #include "IR/IRImpls.h"
 #include "LanguageModel/LLVMInstrinsics.h"
@@ -54,16 +53,88 @@ std::shared_ptr<OpenMPFork> getTwinOmpFork(const llvm::CallBase *ompForkCall) {
 bool isPrintf(const llvm::StringRef &funcName) { return funcName.equals("printf"); }
 }  // namespace
 
-FunctionSummary race::generateFunctionSummary(const llvm::Function *func) {
+FunctionSummary race::generateFunctionSummary(const llvm::Function *func, const llvm::Instruction *first,
+                                              const llvm::Instruction *last) {
   assert(func != nullptr);
-  return generateFunctionSummary(*func);
+  return generateFunctionSummary(*func, first, last);
 }
 
-FunctionSummary race::generateFunctionSummary(const llvm::Function &func) {
+FunctionSummary race::generateFunctionSummary(const llvm::Function &func, const llvm::Instruction *first,
+                                              const llvm::Instruction *last) {
   FunctionSummary instructions;
 
-  for (auto const &basicblock : func.getBasicBlockList()) {
-    for (auto it = basicblock.begin(), end = basicblock.end(); it != end; ++it) {
+  auto notYetLast = true;
+  auto blockIter = func.begin(), blockEnd = func.end();
+  if (first) {
+    while (first->getParent() != &*blockIter) {
+      blockIter++;
+    }
+  }
+  for (; blockIter != blockEnd && notYetLast; blockIter++) {
+    if (blockIter->hasName() && (!first || first->getParent() != &*blockIter)) {
+      // before we begin this block, check if this is a for.cond -- these lead to SIMD sometimes
+      // if first is in this basic block, we're currently processing it
+      const llvm::Instruction *forkStart = nullptr, *forkEnd = nullptr;
+
+      // explanation: SIMD is pain
+      // SIMD directive forces vectorisation of loops, but we don't do vectorisation in our passes!
+      // instead, we have to detect where SIMD *would* be used, so we have to do pattern matching on the block names
+      if (blockIter->getName().startswith("simd.if.then")) {
+        // assumption: SIMD blocks which are retained after SROA will be prefixed with "simd.if.then"
+        // this is consistent, but SROA frequently obliterates these blocks
+        forkStart = &blockIter->front();
+
+        auto count = 1;  // assumption: we can represent nesting like parentheses (()())
+        do {
+          blockIter++;
+
+          if (blockIter->getName().startswith("simd.if.then")) {
+            count++;
+          } else if (blockIter->getName().startswith("simd.if.end")) {
+            count--;
+          }
+        } while (count > 0);
+
+        forkEnd = &blockIter->front();
+      } else if (blockIter->getName().startswith("omp.inner.for.body.preheader") &&
+                 !blockIter->getParent()->getName().startswith(".omp_outlined")) {
+        // assumption: SIMD will never occur inside of an ".omp_outlined"-prefixed function, and
+        // omp.inner.for.body.preheader blocks will only be present in a non-".omp_oulined"-prefixed function iff it is
+        // SIMD.
+        // caveat: it is unclear if SIMD will always start with omp.inner.for.body.preheader
+        forkStart = &blockIter->front();
+
+        do {
+          blockIter++;
+        } while (blockIter->getName().startswith("omp.inner.for") &&
+                 !blockIter->getName().startswith("omp.inner.for.body.preheader") && blockIter != blockEnd);
+
+        if (blockIter != blockEnd) {
+          forkEnd = &blockIter->front();
+        }
+      }
+
+      if (forkStart) {
+        auto fork0 = std::make_shared<OMPSIMDFork>(0, forkStart, forkEnd);
+        auto fork1 = std::make_shared<OMPSIMDFork>(1, forkStart, forkEnd);
+        instructions.push_back(fork0);
+        instructions.push_back(fork1);
+        instructions.push_back(std::make_shared<OMPSIMDJoin>(std::move(fork0)));
+        instructions.push_back(std::make_shared<OMPSIMDJoin>(std::move(fork1)));
+      }
+    }
+
+    auto it = blockIter->begin(), end = blockIter->end();
+    if (first && first->getParent() == &*blockIter) {
+      while (first == &*it) {
+        it++;
+      }
+    }
+    for (; it != end; ++it) {
+      if (last && last == &*it) {
+        notYetLast = false;
+        break;
+      }
       auto inst = llvm::cast<llvm::Instruction>(it);
 
       // TODO: try switch on inst->getOpCode instead

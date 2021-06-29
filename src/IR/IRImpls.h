@@ -13,6 +13,8 @@ limitations under the License.
 
 #include <llvm/IR/Instructions.h>
 
+#include <utility>
+
 #include "IR/IR.h"
 
 namespace race {
@@ -147,6 +149,41 @@ class OpenMPFork : public ForkIR {
   static inline bool classof(const IR *e) { return e->type == Type::OpenMPFork; }
 };
 
+class OMPSIMDFork : public ForkIR {
+  const llvm::Constant *handle;
+  const llvm::Instruction *entry;
+  const llvm::Instruction *exit;
+
+ public:
+  OMPSIMDFork(size_t handleno, const llvm::Instruction *entry, const llvm::Instruction *exit)
+      : ForkIR(Type::OMPSIMDFork),
+        handle(llvm::Constant::getIntegerValue(llvm::IntegerType::get(entry->getContext(), sizeof(size_t) * 8),
+                                               llvm::APInt(sizeof(size_t) * 8, handleno))),
+        entry(entry),
+        exit(exit) {}
+
+  [[nodiscard]] inline const llvm::CallBase *getInst() const override { return nullptr; }
+
+  [[nodiscard]] const llvm::Value *getThreadHandle() const override { return handle; }
+
+  [[nodiscard]] const llvm::Instruction *getThreadEntry() const override { return entry; }
+
+  [[nodiscard]] std::optional<const llvm::Value *> getThreadExit() const override {
+    if (exit) {
+      return std::optional<const llvm::Instruction *>(exit);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  // Used for llvm style RTTI (isa, dyn_cast, etc.)
+  static inline bool classof(const IR *e) { return e->type == Type::OMPSIMDFork; }
+
+  void print(llvm::raw_ostream &os) const override {
+    os << "IR OMPSIMDFork - " << this->getThreadEntry()->getParent()->getName();
+  }
+};
+
 // ==================================================================
 // ================== JoinIR Implementations ========================
 // ==================================================================
@@ -181,6 +218,24 @@ class OpenMPJoin : public JoinIR {
 
   // Used for llvm style RTTI (isa, dyn_cast, etc.)
   static inline bool classof(const IR *e) { return e->type == Type::OpenMPJoin; }
+};
+
+class OMPSIMDJoin : public JoinIR {
+  std::shared_ptr<OMPSIMDFork> fork;
+
+ public:
+  explicit OMPSIMDJoin(std::shared_ptr<OMPSIMDFork> fork) : JoinIR(Type::OMPSIMDJoin), fork(std::move(fork)) {}
+
+  [[nodiscard]] inline const llvm::CallBase *getInst() const override { return fork->getInst(); }
+
+  [[nodiscard]] const llvm::Value *getThreadHandle() const override { return fork->getThreadHandle(); }
+
+  // Used for llvm style RTTI (isa, dyn_cast, etc.)
+  static inline bool classof(const IR *e) { return e->type == Type::OMPSIMDJoin; }
+
+  void print(llvm::raw_ostream &os) const override {
+    os << "IR OMPSIMDJoin - " << this->fork->getThreadEntry()->getParent()->getName();
+  }
 };
 
 // ==================================================================

@@ -56,7 +56,14 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
               "DRB022-reductionmissing-var-yes.c:72:11 DRB022-reductionmissing-var-yes.c:72:13"}),
       Oracle("DRB023-sections1-orig-yes.ll", {"DRB023-sections1-orig-yes.c:58:7 DRB023-sections1-orig-yes.c:60:7",
                                               "DRB023-sections1-orig-yes.c:60:7 DRB023-sections1-orig-yes.c:58:7"}),
-      // DRB 24 and 25 are simd
+      Oracle("DRB024-simdtruedep-orig-yes.ll",
+             {"DRB024-simdtruedep-orig-yes.c:66:11 DRB024-simdtruedep-orig-yes.c:66:11",
+              "DRB024-simdtruedep-orig-yes.c:66:11 DRB024-simdtruedep-orig-yes.c:66:12"}),
+      Oracle("DRB025-simdtruedep-var-yes.ll",
+             {
+                 "DRB025-simdtruedep-var-yes.c:68:11 DRB025-simdtruedep-var-yes.c:68:11",
+                 "DRB025-simdtruedep-var-yes.c:68:11 DRB025-simdtruedep-var-yes.c:68:12",
+             }),
       // DRB 26 is target
       // DRB 27 is task
 
@@ -114,7 +121,7 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
       Oracle("DRB067-restrictpointer1-orig-no.ll", {}),
       Oracle("DRB068-restrictpointer2-orig-no.ll", {}),
       Oracle("DRB069-sectionslock1-orig-no.ll", {}),
-      // 70 simd
+      Oracle("DRB070-simd1-orig-no.ll", {}),
       // 71 target
       // 72 task
       // 73 Broken Debug Info
@@ -155,7 +162,7 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
       // 95 taskloop
       // 96 collapse + taskloop + multi-dimen
       // 97 target
-      // 98 simd + collpase
+      // Oracle("DRB098-simd2-orig-no.ll", {}), // needs collapse support
       // 99 target
       // 100-101 task
       // 102 threadprivate + copyprivate => Oracle("DRB102-copyprivate-orig-no.ll", {}),
@@ -163,10 +170,9 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
       Oracle("DRB104-nowait-barrier-orig-no.ll", {}),
       // 105-107 task
       Oracle("DRB108-atomic-orig-no.ll", {}),
-      Oracle("DRB109-orderedmissing-orig-yes.ll", {
-                                                      "DRB109-orderedmissing-orig-yes.c:56:6 DRB109-orderedmissing-orig-yes.c:56:6",
-                                                      "DRB109-orderedmissing-orig-yes.c:56:6 DRB109-orderedmissing-orig-yes.c:56:6"
-                                                  }),
+      Oracle("DRB109-orderedmissing-orig-yes.ll",
+             {"DRB109-orderedmissing-orig-yes.c:56:6 DRB109-orderedmissing-orig-yes.c:56:6",
+              "DRB109-orderedmissing-orig-yes.c:56:6 DRB109-orderedmissing-orig-yes.c:56:6"}),
       Oracle("DRB110-ordered-orig-no.ll", {}),
       Oracle("DRB111-linearmissing-orig-yes.ll",
              {
@@ -177,7 +183,8 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
       // 112 linear
       Oracle("DRB113-default-orig-no.ll", {}),
       // 114 omp if
-      // 115 simd
+      // dispatch interleaving not detected
+      // Oracle("DRB115-forsimd-orig-yes.ll", {"DRB115-forsimd-orig-yes.c:66:11 DRB115-forsimd-orig-yes.c:66:12"}),
       // 116 target
       // 117 task
       // 118-119 nest lock
@@ -188,7 +195,8 @@ TEST_CASE("dataracebench", "[integration][dataracebench][omp]") {
       Oracle("DRB125-single-orig-no.ll", {}),
       // 126 // doesn't check thread counts
       // 127-136 task
-      // 137-138 simd
+      // Oracle("DRB137-simdsafelen-orig-no.ll", {}), // no safelen support
+      // Oracle("DRB138-simdsafelen-orig-yes.ll", {}), // no safelen support
       // 139 // nested parallel
       Oracle("DRB140-reduction-barrier-orig-yes.ll",
              {"DRB140-reduction-barrier-orig-yes.c:25:7 DRB140-reduction-barrier-orig-yes.c:27:31",

@@ -61,13 +61,13 @@ llvm::raw_ostream &race::operator<<(llvm::raw_ostream &os, const IR::Type &type)
 void ReadIR::print(llvm::raw_ostream &os) const {
   auto val = getAccessedValue();
   auto valName = getValNameHelper(val);
-  os << "IR " << type << " - " << valName << " - " << getInst() << "\n";
+  os << "IR " << type << " - " << valName << " - " << getInst();
 }
 
 void WriteIR::print(llvm::raw_ostream &os) const {
   auto val = getAccessedValue();
   auto valName = getValNameHelper(val);
-  os << "IR " << type << " - " << valName << " - " << getInst() << "\n";
+  os << "IR " << type << " - " << valName << " - " << getInst();
 }
 
 void ForkIR::print(llvm::raw_ostream &os) const {
@@ -76,31 +76,31 @@ void ForkIR::print(llvm::raw_ostream &os) const {
 
   auto handle = getThreadHandle();
   auto handleName = getValNameHelper(handle, "UnknownHandle");
-  os << "IR " << type << " - " << funcName << " - " << handleName << "\n";
+  os << "IR " << type << " - " << funcName << " - " << handleName;
 }
 
 void JoinIR::print(llvm::raw_ostream &os) const {
   auto handle = getThreadHandle();
   auto handleName = getValNameHelper(handle, "UnknownHandle");
-  os << "IR " << type << " - " << handleName << "\n";
+  os << "IR " << type << " - " << handleName;
 }
 
 void CallIR::print(llvm::raw_ostream &os) const {
   auto func = llvm::cast<llvm::CallBase>(getInst())->getFunction();
   auto funcName = getValNameHelper(func, "UnknownFunc");
-  os << "IR " << type << " - " << funcName << "\n";
+  os << "IR " << type << " - " << funcName;
 }
 void LockIR::print(llvm::raw_ostream &os) const {
   auto lockName = getValNameHelper(getLockValue());
-  os << "IR " << type << " - " << lockName << "\n";
+  os << "IR " << type << " - " << lockName;
 }
 
 void UnlockIR::print(llvm::raw_ostream &os) const {
   auto lockName = getValNameHelper(getLockValue());
-  os << "IR " << type << " - " << lockName << "\n";
+  os << "IR " << type << " - " << lockName;
 }
 
-void BarrierIR::print(llvm::raw_ostream &os) const { os << "IR " << type << "\n"; }
+void BarrierIR::print(llvm::raw_ostream &os) const { os << "IR " << type; }
 
 llvm::StringRef IR::toString() const {
   std::string s;

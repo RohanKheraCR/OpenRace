@@ -19,8 +19,10 @@ limitations under the License.
 namespace race {
 using FunctionSummary = std::vector<std::shared_ptr<const IR>>;
 
-FunctionSummary generateFunctionSummary(const llvm::Function *func);
-FunctionSummary generateFunctionSummary(const llvm::Function &func);
+FunctionSummary generateFunctionSummary(const llvm::Function *func, const llvm::Instruction *first = nullptr,
+                                        const llvm::Instruction *last = nullptr);
+FunctionSummary generateFunctionSummary(const llvm::Function &func, const llvm::Instruction *first = nullptr,
+                                        const llvm::Instruction *last = nullptr);
 
 // class Builder {
 //     mutable std::map<const llvm::Function *, std::shared_ptr<FunctionSummary>> cache;

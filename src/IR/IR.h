@@ -32,10 +32,12 @@ class IR {
     Fork,
     PthreadCreate,
     OpenMPFork,
+    OMPSIMDFork,
     END_Fork,
     Join,
     PthreadJoin,
     OpenMPJoin,
+    OMPSIMDJoin,
     END_Join,
     Lock,
     PthreadMutexLock,
@@ -137,10 +139,13 @@ class ForkIR : public IR {
   // the thread handle is &thread
   [[nodiscard]] virtual const llvm::Value *getThreadHandle() const = 0;
 
-  // Get the function the spawned thread will execute
+  // Get the function or instruction the spawned thread will execute
   // E.g. for pthread_create(&thread, NULL, foo, NULL)
   // the thread entry is foo
   [[nodiscard]] virtual const llvm::Value *getThreadEntry() const = 0;
+
+  // Get the instruction that the spawned thread will terminate on, if this is a non-function thread start
+  [[nodiscard]] virtual std::optional<const llvm::Value *> getThreadExit() const { return std::nullopt; }
 
   void print(llvm::raw_ostream &os) const override;
 

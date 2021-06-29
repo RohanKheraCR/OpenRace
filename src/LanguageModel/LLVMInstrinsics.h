@@ -11,7 +11,11 @@ limitations under the License.
 
 #pragma once
 
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/ADT/StringRef.h>
+
+#include <set>
 
 namespace LLVMModel {
 
@@ -27,6 +31,60 @@ inline bool isMemcpy(const llvm::StringRef &funcName) { return funcName.startswi
 inline bool isNoEffect(const llvm::StringRef &funcName) {
   return isDebug(funcName) || isLifetime(funcName) || isStackSave(funcName) || isStackRestore(funcName) ||
          isMemcpy(funcName);
+}
+
+inline std::optional<const llvm::BasicBlock *> findAnyBlockSuccessorBFS(
+    const std::set<const llvm::BasicBlock *> &starts, const std::function<bool(const llvm::BasicBlock *)> &matches,
+    const std::function<bool(const llvm::BasicBlock *)> &isAvoided, std::set<const llvm::BasicBlock *> &visited) {
+  std::deque<const llvm::BasicBlock *> queue;
+  std::copy(starts.begin(), starts.end(), std::back_inserter(queue));
+
+  while (!queue.empty()) {
+    auto curr = queue.front();
+    queue.pop_front();
+
+    if (visited.find(curr) != visited.end()) {
+      continue;
+    }
+    visited.insert(curr);
+
+    if (matches(curr)) {
+      return curr;
+    }
+
+    if (!isAvoided(curr)) {
+      std::copy(succ_begin(curr), succ_end(curr), std::back_inserter(queue));
+    }
+  }
+
+  return std::nullopt;
+}
+
+inline void findAllBlockSuccessorsBFS(const std::set<const llvm::BasicBlock *> &starts,
+                                      const std::function<bool(const llvm::BasicBlock *)> &matches,
+                                      const std::function<bool(const llvm::BasicBlock *)> &isAvoided,
+                                      std::set<const llvm::BasicBlock *> &visited,
+                                      std::set<const llvm::BasicBlock *> &found) {
+  std::deque<const llvm::BasicBlock *> queue;
+  std::copy(starts.begin(), starts.end(), std::back_inserter(queue));
+
+  while (!queue.empty()) {
+    auto curr = queue.front();
+    queue.pop_front();
+
+    if (visited.find(curr) != visited.end()) {
+      continue;
+    }
+    visited.insert(curr);
+
+    if (matches(curr)) {
+      found.insert(curr);
+    }
+
+    if (!isAvoided(curr)) {
+      std::copy(succ_begin(curr), succ_end(curr), std::back_inserter(queue));
+    }
+  }
 }
 
 }  // namespace LLVMModel
