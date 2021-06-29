@@ -22,6 +22,8 @@ limitations under the License.
 
 using namespace race;
 
+extern llvm::cl::opt<bool> DEBUG_PTA;
+
 namespace {
 
 bool hasThreadLocalOperand(const llvm::Instruction *inst) {
@@ -71,6 +73,9 @@ FunctionSummary race::generateFunctionSummary(const llvm::Function &func, const 
     }
   }
   for (; blockIter != blockEnd && notYetLast; blockIter++) {
+    if (DEBUG_PTA) {
+      llvm::outs() << "bb: " << blockIter->getName() << "\n";
+    }
     if (blockIter->hasName() && (!first || first->getParent() != &*blockIter)) {
       // before we begin this block, check if this is a for.cond -- these lead to SIMD sometimes
       // if first is in this basic block, we're currently processing it
@@ -136,19 +141,31 @@ FunctionSummary race::generateFunctionSummary(const llvm::Function &func, const 
         break;
       }
       auto inst = llvm::cast<llvm::Instruction>(it);
-
+      if (DEBUG_PTA) {
+        inst->print(llvm::outs(), false);
+        llvm::outs() << "\n";
+      }
       // TODO: try switch on inst->getOpCode instead
       if (auto loadInst = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+        if (DEBUG_PTA) {
+          loadInst->print(llvm::outs(), false);
+        }
         if (loadInst->isAtomic() || loadInst->isVolatile() || hasThreadLocalOperand(loadInst)) {
           continue;
         }
         instructions.push_back(std::make_shared<race::Load>(loadInst));
       } else if (auto storeInst = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+        if (DEBUG_PTA) {
+          storeInst->print(llvm::outs(), false);
+        }
         if (storeInst->isAtomic() || storeInst->isVolatile() || hasThreadLocalOperand(storeInst)) {
           continue;
         }
         instructions.push_back(std::make_shared<race::Store>(storeInst));
       } else if (auto callInst = llvm::dyn_cast<llvm::CallBase>(inst)) {
+        if (DEBUG_PTA) {
+          callInst->print(llvm::outs(), false);
+        }
         if (callInst->isIndirectCall()) {
           // let trace deal with indirect calls
           instructions.push_back(std::make_shared<race::CallIR>(callInst));
@@ -209,6 +226,10 @@ FunctionSummary race::generateFunctionSummary(const llvm::Function &func, const 
         } else if (OpenMPModel::isSetLock(funcName)) {
           instructions.push_back(std::make_shared<OpenMPSetLock>(callInst));
         } else if (OpenMPModel::isUnsetLock(funcName)) {
+          instructions.push_back(std::make_shared<OpenMPUnsetLock>(callInst));
+        } else if (OpenMPModel::isSetNestLock(funcName)) {
+          instructions.push_back(std::make_shared<OpenMPSetLock>(callInst));
+        } else if (OpenMPModel::isUnsetNestLock(funcName)) {
           instructions.push_back(std::make_shared<OpenMPUnsetLock>(callInst));
         } else if (OpenMPModel::isGetThreadNum(funcName)) {
           instructions.push_back(std::make_shared<OpenMPGetThreadNum>(callInst));

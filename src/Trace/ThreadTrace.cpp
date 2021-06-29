@@ -30,6 +30,9 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
   }
   callstack.push(func);
 
+  if (DEBUG_PTA) {
+    llvm::outs() << "Generating Func Sum: TID: " << thread.id << " Func: " << func->getName() << "\n";
+  }
   const llvm::Instruction *first = nullptr, *last = nullptr;
   if (spawnEvent) {
     if (llvm::isa<llvm::Instruction>(spawnEvent->getIRInst()->getThreadEntry())) {
