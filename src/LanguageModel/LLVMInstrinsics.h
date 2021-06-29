@@ -11,9 +11,9 @@ limitations under the License.
 
 #pragma once
 
+#include <llvm/ADT/StringRef.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/CFG.h>
-#include <llvm/ADT/StringRef.h>
 
 #include <set>
 
