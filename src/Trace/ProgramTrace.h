@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <vector>
 
+#include "IR/IRImpls.h"
 #include "LanguageModel/RaceModel.h"
 #include "ThreadTrace.h"
 #include "Trace/Event.h"
@@ -26,6 +27,26 @@ struct OpenMPState {
   bool inTeamsRegion() const { return teamsDepth > 0; }
 
   bool isParallelEnabled = true;
+  std::optional<size_t> skipNextFork = false;
+
+  void update(const CallIR *call) {
+    if (auto setNumThreads = llvm::dyn_cast<OpenMPSetNumThreads>(call)) {
+      auto num = setNumThreads->getNumThreads();
+      // Parallelism is enabled when the value is not constant or > 1
+      isParallelEnabled = !num || (num > 1);
+      return;
+    }
+
+    if (auto pushNumThreads = llvm::dyn_cast<OpenMPPushNumThreads>(call)) {
+      auto num = pushNumThreads->getNumThreads();
+      if (!num) {
+        skipNextFork = std::nullopt;
+        return;
+      }
+      skipNextFork = ((num == 1)) ? 2 : 0;
+      return;
+    }
+  }
 };
 
 // all included states are ONLY used when building ProgramTrace/ThreadTrace

@@ -391,4 +391,17 @@ class OpenMPSetNumThreads : public CallIRImpl<IR::Type::OpenMPSetNumThreads> {
     return val->getZExtValue();
   }
 };
+
+class OpenMPPushNumThreads : public CallIRImpl<IR::Type::OpenMPPushNumThreads> {
+  // https://github.com/llvm/llvm-project/blob/ef32c611aa214dea855364efd7ba451ec5ec3f74/openmp/runtime/src/kmp_runtime.cpp#L7158
+ public:
+  using CallIRImpl::CallIRImpl;
+
+  std::optional<uint64_t> getNumThreads() const {
+    auto call = getInst();
+    auto val = llvm::dyn_cast<llvm::ConstantInt>(call->getArgOperand(2));
+    if (!val) return std::nullopt;
+    return val->getZExtValue();
+  }
+};
 }  // namespace race

@@ -60,16 +60,6 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       continue;
     }
 
-    if (auto setnumthreads = llvm::dyn_cast<OpenMPSetNumThreads>(ir.get())) {
-      auto numThreads = setnumthreads->getNumThreads();
-      state.openmp.isParallelEnabled = !numThreads || (numThreads.value() > 1);
-    }
-
-    // If parallelism has been disabled only need to check if it is enabled again, otherwise skip
-    if (!state.openmp.isParallelEnabled) {
-      continue;
-    }
-
     if (auto readIR = llvm::dyn_cast<ReadIR>(ir.get())) {
       std::shared_ptr<const ReadIR> read(ir, readIR);
       events.push_back(std::make_unique<const ReadEventImpl>(read, einfo, events.size()));
@@ -77,6 +67,21 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       std::shared_ptr<const WriteIR> write(ir, writeIR);
       events.push_back(std::make_unique<const WriteEventImpl>(write, einfo, events.size()));
     } else if (auto forkIR = llvm::dyn_cast<ForkIR>(ir.get())) {
+      // Skip OpenMP fork if parallism is disabled or has been disabled for the next omp fork
+      if (forkIR->type == IR::Type::OpenMPFork && (!state.openmp.isParallelEnabled || state.openmp.skipNextFork)) {
+        if (state.openmp.skipNextFork) {
+          if (state.openmp.skipNextFork.value() == 0) {
+            state.openmp.skipNextFork = std::nullopt;
+          } else {
+            state.openmp.skipNextFork.value()--;
+            if (state.openmp.skipNextFork.value() == 0) state.openmp.skipNextFork = std::nullopt;
+            continue;
+          }
+        } else if (!state.openmp.isParallelEnabled) {
+          continue;
+        }
+      }
+
       std::shared_ptr<const ForkIR> fork(ir, forkIR);
       events.push_back(std::make_unique<const ForkEventImpl>(fork, einfo, events.size()));
 
@@ -117,6 +122,8 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       events.push_back(std::make_unique<const BarrierEventImpl>(barrier, einfo, events.size()));
     } else if (auto callIR = llvm::dyn_cast<CallIR>(ir.get())) {
       std::shared_ptr<const CallIR> call(ir, callIR);
+
+      state.openmp.update(callIR);
 
       if (call->isIndirect()) {
         // TODO: handle indirect

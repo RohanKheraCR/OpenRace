@@ -175,6 +175,8 @@ FunctionSummary race::generateFunctionSummary(const llvm::Function &func) {
           instructions.push_back(std::make_shared<OpenMPGetThreadNum>(callInst));
         } else if (OpenMPModel::isSetNumThreads(funcName)) {
           instructions.push_back(std::make_shared<OpenMPSetNumThreads>(callInst));
+        } else if (OpenMPModel::isPushNumThreads(funcName)) {
+          instructions.push_back(std::make_shared<OpenMPPushNumThreads>(callInst));
         } else if (OpenMPModel::isOrderedStart(funcName)) {
           instructions.push_back(std::make_shared<OpenMPOrderedStart>(callInst));
         } else if (OpenMPModel::isOrderedEnd(funcName)) {
