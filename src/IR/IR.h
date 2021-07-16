@@ -68,6 +68,7 @@ class IR {
     OpenMPMasterStart,
     OpenMPMasterEnd,
     OpenMPGetThreadNum,
+    OpenMPSetNumThreads,
     END_Call
   } type;
   [[nodiscard]] virtual const llvm::Instruction *getInst() const = 0;

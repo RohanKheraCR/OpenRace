@@ -100,4 +100,8 @@ inline bool isTaskAlloc(const llvm::StringRef& funcName) { return funcName.equal
 
 inline bool isGetThreadNum(const llvm::StringRef& funcName) { return funcName.equals("omp_get_thread_num"); }
 
+inline bool isSetNumThreads(const llvm::StringRef& funcName) { return funcName.equals("omp_set_num_threads"); }
+
+inline bool isPushNumThreads(const llvm::StringRef& funcName) { return funcName.equals("__kmpc_push_num_threads"); }
+
 }  // namespace OpenMPModel

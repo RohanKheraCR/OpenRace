@@ -13,6 +13,12 @@ limitations under the License.
 
 #include "helpers/ReportChecking.h"
 
+#define TEST_LL(name, file, ...) \
+  TEST_CASE(name, "[integration][omp]") { checkTest(file, "integration/openmp/", {__VA_ARGS__}); }
+
+#define EXPECTED(...) __VA_ARGS__
+#define NORACE
+
 TEST_CASE("OpenMP Integration Tests", "[integration][omp]") {
   std::vector<Oracle> oracles = {
       Oracle("reduction-no.ll", {}), Oracle("master-iteration-counter-no.ll", {}),
@@ -102,3 +108,14 @@ TEST_CASE("OpenMP threadlocal", "[integration][omp]") {
   };
   checkOracles(oracles, "integration/openmp/");
 }
+
+// set_num_threads and push_num_threads tests
+TEST_LL("OpenMP set-num-threads-no", "set-num-threads-no.ll", NORACE)
+TEST_LL("OpenMP set-num-threads-reset-yes", "set-num-threads-reset-yes.ll",
+        EXPECTED("set-num-threads-reset-yes.c:15:11 set-num-threads-reset-yes.c:15:11"))
+// Cannot pass without support for push_num_threads
+// TEST_LL("OpenMP push-num-threads-no", "push-num-threads-no.ll" NORACE)
+// TEST_LL("OpenMP push-num-threads-yes", "push-num-threads-yes.ll",
+//         EXPECTED("push-num-threads-yes.c:11:11 push-num-threads-yes.c:11:11"))
+// TEST_LL("OpenMP push-num-threads-2-yes", "push-num-threads-2-yes.ll",
+//         EXPECTED("push-num-threads-2-yes.c:14:12 push-num-threads-2-yes.c:14:12"))

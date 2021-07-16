@@ -60,6 +60,16 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       continue;
     }
 
+    if (auto setnumthreads = llvm::dyn_cast<OpenMPSetNumThreads>(ir.get())) {
+      auto numThreads = setnumthreads->getNumThreads();
+      state.openmp.isParallelEnabled = !numThreads || (numThreads.value() > 1);
+    }
+
+    // If parallelism has been disabled only need to check if it is enabled again, otherwise skip
+    if (!state.openmp.isParallelEnabled) {
+      continue;
+    }
+
     if (auto readIR = llvm::dyn_cast<ReadIR>(ir.get())) {
       std::shared_ptr<const ReadIR> read(ir, readIR);
       events.push_back(std::make_unique<const ReadEventImpl>(read, einfo, events.size()));

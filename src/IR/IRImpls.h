@@ -379,4 +379,16 @@ using OpenMPMasterEnd = CallIRImpl<IR::Type::OpenMPMasterEnd>;
 
 using OpenMPGetThreadNum = CallIRImpl<IR::Type::OpenMPGetThreadNum>;
 
+class OpenMPSetNumThreads : public CallIRImpl<IR::Type::OpenMPSetNumThreads> {
+  // https://www.openmp.org/spec-html/5.0/openmpsu110.html#x147-6380003.2.1
+ public:
+  using CallIRImpl::CallIRImpl;
+
+  std::optional<uint64_t> getNumThreads() const {
+    auto call = getInst();
+    auto val = llvm::dyn_cast<llvm::ConstantInt>(call->getArgOperand(0));
+    if (!val) return std::nullopt;
+    return val->getZExtValue();
+  }
+};
 }  // namespace race

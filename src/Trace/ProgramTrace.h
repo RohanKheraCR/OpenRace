@@ -24,6 +24,8 @@ struct OpenMPState {
   size_t teamsDepth = 0;
 
   bool inTeamsRegion() const { return teamsDepth > 0; }
+
+  bool isParallelEnabled = true;
 };
 
 // all included states are ONLY used when building ProgramTrace/ThreadTrace
