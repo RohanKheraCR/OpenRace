@@ -274,9 +274,7 @@ TEST_LL("DRB121", "DRB121-reduction-orig-no.ll", NORACE)
 // TEST_LL("DRB124", /*TODO*/, EXPECTED(/*TODO*/))
 
 TEST_LL("DRB125", "DRB125-single-orig-no.ll", NORACE)
-
-// 126 // doesn't check thread counts
-// TEST_LL("DRB126", /*TODO*/, EXPECTED(/*TODO*/))
+TEST_LL("DRB126", "DRB126-firstprivatesections-orig-no.ll", NORACE)
 
 // 127-136 task
 // TEST_LL("DRB127", /*TODO*/, EXPECTED(/*TODO*/))
