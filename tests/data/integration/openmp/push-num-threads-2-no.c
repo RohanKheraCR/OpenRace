@@ -10,6 +10,7 @@ int main() {
 #pragma omp parallel num_threads(4)
   { int local = omp_get_thread_num(); }
 
+  // No race here because num threads is set to 1
 #pragma omp parallel
   { shared = omp_get_thread_num(); }
 

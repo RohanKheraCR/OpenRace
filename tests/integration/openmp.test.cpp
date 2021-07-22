@@ -127,8 +127,7 @@ TEST_LL("OpenMP set-num-threads-no", "set-num-threads-no.ll", NORACE)
 TEST_LL("OpenMP set-num-threads-reset-yes", "set-num-threads-reset-yes.ll",
         EXPECTED("set-num-threads-reset-yes.c:15:11 set-num-threads-reset-yes.c:15:11"))
 // Cannot pass without support for push_num_threads
-// TEST_LL("OpenMP push-num-threads-no", "push-num-threads-no.ll" NORACE)
-// TEST_LL("OpenMP push-num-threads-yes", "push-num-threads-yes.ll",
-//         EXPECTED("push-num-threads-yes.c:11:11 push-num-threads-yes.c:11:11"))
-// TEST_LL("OpenMP push-num-threads-2-yes", "push-num-threads-2-yes.ll",
-//         EXPECTED("push-num-threads-2-yes.c:14:12 push-num-threads-2-yes.c:14:12"))
+TEST_LL("OpenMP push-num-threads-no", "push-num-threads-no.ll" NORACE)
+TEST_LL("OpenMP push-num-threads-yes", "push-num-threads-yes.ll",
+        EXPECTED("push-num-threads-yes.c:11:11 push-num-threads-yes.c:11:11"))
+TEST_LL("OpenMP push-num-threads-2-no", "push-num-threads-2-no.ll", NORACE)

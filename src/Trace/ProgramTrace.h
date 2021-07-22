@@ -28,26 +28,29 @@ struct OpenMPState {
   bool inTeamsRegion() const { return teamsDepth > 0; }
 
   bool isParallelEnabled = true;
-  std::optional<size_t> skipNextFork = false;
+  std::optional<std::pair<bool, size_t>> skipNextFork = std::nullopt;
 
   void update(const CallIR *call) {
     if (auto setNumThreads = llvm::dyn_cast<OpenMPSetNumThreads>(call)) {
       auto num = setNumThreads->getNumThreads();
       // Parallelism is enabled when the value is not constant or > 1
+      llvm::outs() << "Updated openmp parallelsim neabled state\n";
       isParallelEnabled = !num || (num > 1);
       return;
     }
 
     if (auto pushNumThreads = llvm::dyn_cast<OpenMPPushNumThreads>(call)) {
+      llvm::outs() << "Updated openmp skipNextFork\n";
       auto num = pushNumThreads->getNumThreads();
       if (!num) {
         skipNextFork = std::nullopt;
         return;
       }
-      skipNextFork = ((num == 1)) ? 2 : 0;
+      skipNextFork = std::make_pair((num == 1), 2);  //((num == 1)) ? 2 : 0;
       return;
     }
   }
+
   // Track if we are in single region
   bool inSingle = false;
 

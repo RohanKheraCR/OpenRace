@@ -155,19 +155,28 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       std::shared_ptr<const WriteIR> write(ir, writeIR);
       events.push_back(std::make_unique<const WriteEventImpl>(write, einfo, events.size()));
     } else if (auto forkIR = llvm::dyn_cast<ForkIR>(ir.get())) {
-      // Skip OpenMP fork if parallism is disabled or has been disabled for the next omp fork
-      if (forkIR->type == IR::Type::OpenMPFork && (!state.openmp.isParallelEnabled || state.openmp.skipNextFork)) {
-        if (state.openmp.skipNextFork) {
-          if (state.openmp.skipNextFork.value() == 0) {
+      // Two ways to set parallelism
+      // skipNextFork or isParallelisEnabled
+      // skipNextFork takes precedence if it is set
+      if (forkIR->type == IR::Type::OpenMPFork) {
+        if (state.openmp.skipNextFork.has_value()) {
+          bool shouldSkip = state.openmp.skipNextFork.value().first;
+          auto &skipCount = state.openmp.skipNextFork.value().second;
+          skipCount--;
+          if (skipCount == 0) {
             state.openmp.skipNextFork = std::nullopt;
-          } else {
-            state.openmp.skipNextFork.value()--;
-            if (state.openmp.skipNextFork.value() == 0) state.openmp.skipNextFork = std::nullopt;
+          }
+          if (shouldSkip) {
+            llvm::outs() << "Skipping fork\n";
             continue;
           }
-        } else if (!state.openmp.isParallelEnabled) {
+        }
+        // if skipNextFork is not set, and parallelism is disabled, skip omp sections
+        else if (!state.openmp.isParallelEnabled) {
+          llvm::outs() << "Skipping fork (disabled)\n";
           continue;
         }
+        llvm::outs() << "not skipping fork\n";
       }
       // if spawned in single region, put omp task forks on master thread only
       if (forkIR->type == IR::Type::OpenMPTaskFork && state.openmp.inSingle && !isOpenMPMasterThread(thread)) {
