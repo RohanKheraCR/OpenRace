@@ -382,7 +382,6 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
 
     FunctionChanged = false;
     // propagate constant inside the function and prep next propagation
-    auto worksize = work.size();
     work.clear();
     for (Function *F : changedFunction) {
       const TargetLibraryInfo &TLI = GetTLI(*F);
