@@ -348,6 +348,10 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
   bool ArgPropagated = true;
   bool FunctionChanged = true;
 
+  // this map keeps track of all function uses that we consider legitimate in the program
+  //
+  // since the number of function calls per function averages out to some constant (which appears to be somewhere around
+  // 4 or 5 for typical cases), the list here will grow linearly with function size with a relatively small factor
   std::multimap<Function *, Function *> userEdges;
 
   for (Function &F : M) {
@@ -356,6 +360,11 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
     for (auto userFunction : getUserFunctions(F)) {
       userEdges.emplace(userFunction, &F);
     }
+  }
+
+  if (userEdges.size() > 10 * M.getFunctionList().size()) {
+    llvm::errs() << "WARNING: OmpConstPropPass found significantly more user edges (" << userEdges.size()
+                 << ") than functions (" << M.getFunctionList().size() << ") in module!\n";
   }
 
   SmallSet<Function *, 8> work;
