@@ -382,13 +382,17 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
 
     FunctionChanged = false;
     // propagate constant inside the function and prep next propagation
+    auto worksize = work.size();
     work.clear();
     for (Function *F : changedFunction) {
       const TargetLibraryInfo &TLI = GetTLI(*F);
-      FunctionChanged |= intraConstantProp(*F, TLI);
-      auto userEdgeRange = userEdges.equal_range(F);
-      for (auto userEdgeIter = userEdgeRange.first; userEdgeIter != userEdgeRange.second; userEdgeIter++) {
-        work.insert(userEdgeIter->second);  // these are the only entries which were propagated to
+      auto furtherPropagated = intraConstantProp(*F, TLI);
+      FunctionChanged |= furtherPropagated;
+      if (furtherPropagated) {
+        auto userEdgeRange = userEdges.equal_range(F);
+        for (auto userEdgeIter = userEdgeRange.first; userEdgeIter != userEdgeRange.second; userEdgeIter++) {
+          work.insert(userEdgeIter->second);  // these are the only entries which were propagated to
+        }
       }
     }
 
