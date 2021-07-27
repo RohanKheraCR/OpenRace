@@ -342,6 +342,8 @@ std::set<Function *> getUserFunctions(Function &F) {
   return userFunctions;
 }
 
+// TODO fix constant propagation in libraries where exported functions are called called internally as well, leading to
+// false negatives due to incorrect constant propagation
 bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryInfo &(Function &)> GetTLI,
                                   std::function<const DominatorTree &(Function &)> GetDT) {
   bool Changed = false;
