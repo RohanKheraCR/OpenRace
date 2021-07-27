@@ -329,13 +329,13 @@ std::set<Function *> getUserFunctions(Function &F) {
     // If no abstract call site was created we did not understand the use,
     // bail.
     AbstractCallSite ACS(&U);
-    if (!ACS) return {}; // this would be bailed anyways
+    if (!ACS) return {};  // this would be bailed anyways
 
     // Mismatched argument count is undefined behavior. Simply bail out to
     // avoid handling of such situations below (avoiding asserts/crashes).
     unsigned NumActualArgs = ACS.getNumArgOperands();
     if (F.isVarArg() ? F.arg_size() > NumActualArgs : F.arg_size() != NumActualArgs)
-      return {}; // this would be bailed anyways
+      return {};  // this would be bailed anyways
 
     userFunctions.insert(ACS.getInstruction()->getParent()->getParent());
   }
@@ -357,7 +357,6 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
       userEdges.emplace(userFunction, &F);
     }
   }
-
 
   SmallSet<Function *, 8> work;
   for (auto edge : userEdges) {
@@ -389,7 +388,7 @@ bool runOpenMPConstantPropagation(Module &M, std::function<const TargetLibraryIn
       FunctionChanged |= intraConstantProp(*F, TLI);
       auto userEdgeRange = userEdges.equal_range(F);
       for (auto userEdgeIter = userEdgeRange.first; userEdgeIter != userEdgeRange.second; userEdgeIter++) {
-        work.insert(userEdgeIter->second); // these are the only entries which were propagated to
+        work.insert(userEdgeIter->second);  // these are the only entries which were propagated to
       }
     }
 
