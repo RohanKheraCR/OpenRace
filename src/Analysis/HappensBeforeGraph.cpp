@@ -253,6 +253,7 @@ HappensBeforeGraph::HappensBeforeGraph(const race::ProgramTrace &program) {
       worklist.pop_front();
 
       // Add next nodes from sync edges
+      // cppcheck-suppress stlIfFind
       if (auto it = syncEdges.find(node); it != syncEdges.end()) {
         for (auto const next : it->second) {
           addToWorklist(next);
@@ -260,6 +261,7 @@ HappensBeforeGraph::HappensBeforeGraph(const race::ProgramTrace &program) {
       }
 
       // Add next sync event after this one on same thread
+      // cppcheck-suppress stlIfFind
       if (auto opt = findNextSyncAfter(node); opt.has_value()) {
         addToWorklist(opt.value());
       }
@@ -311,6 +313,7 @@ bool HappensBeforeGraph::canReach(const Event *src, const Event *dst) const {
 }
 
 bool HappensBeforeGraph::isReachable(EventPID src, EventPID dst) const {
+  // cppcheck-suppress stlIfFind
   if (auto const reachable = syncReachable.find(src); reachable != syncReachable.end()) {
     return reachable->second.find(dst) != reachable->second.end();
   }

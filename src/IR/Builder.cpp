@@ -215,7 +215,7 @@ std::shared_ptr<const FunctionSummary> generateFunctionSummary(const llvm::Funct
         } else {
           // Used to make sure we are not implicitly ignoring any OpenMP features
           // We should instead make sure we take the correct action for any OpenMP call
-          if (!OpenMPModel::isOpenMP(funcName) || OpenMPModel::isNoEffect(funcName)) {
+          if (OpenMPModel::isOpenMP(funcName) && !OpenMPModel::isNoEffect(funcName)) {
             llvm::errs() << "Unhandled OpenMP call: " << funcName << "\n";
             llvm_unreachable("Unhandled OpenMP Call!");
           }
