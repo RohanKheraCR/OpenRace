@@ -25,12 +25,9 @@ bool ThreadLocalAnalysis::isThreadLocalAccess(const MemAccessEvent *write, const
   // We should not report a race because the only possible
   // shared object is thread local.
 
+  // Guaranteed to be sorted in RaceDetect
   auto writePtsTo = write->getAccessedMemory();
   auto otherPtsTo = other->getAccessedMemory();
-
-  // Must be sorted to do set_intersection
-  std::sort(writePtsTo.begin(), writePtsTo.end());
-  std::sort(otherPtsTo.begin(), otherPtsTo.end());
 
   std::vector<const pta::ObjTy *> shared;
   std::set_intersection(writePtsTo.begin(), writePtsTo.end(), otherPtsTo.begin(), otherPtsTo.end(),

@@ -118,6 +118,20 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
     auto threadedWrites = sharedmem.getThreadedWrites(sharedObj);
     auto threadedReads = sharedmem.getThreadedReads(sharedObj);
 
+    // pre-sort accessed memory for reads and writes for thread local analysis
+    for (auto const &thread : threadedWrites) {
+      for (auto const write : thread.second) {
+        auto writePtsTo = write->getAccessedMemory();
+        std::sort(writePtsTo.begin(), writePtsTo.end());
+      }
+    }
+    for (auto const &thread : threadedReads) {
+      for (auto const read : thread.second) {
+        auto readPtsTo = read->getAccessedMemory();
+        std::sort(readPtsTo.begin(), readPtsTo.end());
+      }
+    }
+
     for (auto it = threadedWrites.begin(), end = threadedWrites.end(); it != end; ++it) {
       auto const wtid = it->first;
       auto const writes = it->second;
