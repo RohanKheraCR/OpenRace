@@ -110,6 +110,7 @@ bool isOpenMPTeamSpecific(const IR *ir) {
          type == IR::Type::OpenMPCriticalEnd || type == IR::Type::OpenMPSetLock || type == IR::Type::OpenMPUnsetLock;
 }
 
+// helper method to insert and traverse forks, which is needed for both standard forks and SIMD forks
 void insertAndTraverseFork(std::vector<std::unique_ptr<const Event>> &events, const std::shared_ptr<const ForkIR> &fork,
                            std::vector<std::unique_ptr<ThreadTrace>> &threads, TraceBuildState &state,
                            std::shared_ptr<EventInfo> &einfo) {
@@ -145,6 +146,7 @@ void insertAndTraverseFork(std::vector<std::unique_ptr<const Event>> &events, co
     state.openmp.teamsDepth--;
   }
 }
+
 // Called recursively to build list of events and thread traces
 // node      - the current callgraph node to traverse
 // thread    - the thread trace being built
@@ -182,8 +184,10 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
   auto const context = node->getContext();
   auto einfo = std::make_shared<EventInfo>(thread, context);
 
+  // skip items until the first instruction, if we have a specific first instruction
   state.skipUntil = first;
   const llvm::Instruction *lastCompleted = nullptr;
+  // ensure that we only iterate over instructions relevant to this thread
   for (auto irIter = summary.begin(); irIter != summary.end() && (!last || last != lastCompleted); irIter++) {
     auto const &ir = *irIter;
     lastCompleted = ir->getInst();
@@ -191,13 +195,18 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       continue;
     }
 
-    if (auto block = ir->getInst()->getParent(); OpenMPModel::isSimdBlock(block) && (!first || first->getParent() != block)) {
+    // handle simd blocks
+    if (auto block = ir->getInst()->getParent();
+        OpenMPModel::isSimdBlock(block) && (!first || first->getParent() != block)) {
+      // find the last instruction within the simd block that has IR
       auto prev = ir->getInst();
       auto end = std::next(irIter, 1);
       while (end != summary.end() && end->get()->getInst()->getParent() == block) {
         prev = end->get()->getInst();
         end++;
       }
+
+      // make two (fake) forks and joins to represent threaded writes and reads
       auto fork0 = std::make_shared<OMPSIMDFork>(0, ir->getInst(), prev);
       auto fork1 = std::make_shared<OMPSIMDFork>(1, ir->getInst(), prev);
       insertAndTraverseFork(events, fork0, threads, state, einfo);
@@ -209,6 +218,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       if (end == summary.end()) {
         break;  // we're done here
       } else {
+        // parent thread should not execute the SIMD block
         state.skipUntil = end->get()->getInst();
       }
       continue;

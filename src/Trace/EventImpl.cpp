@@ -35,6 +35,8 @@ std::vector<const pta::CallGraphNodeTy *> ForkEventImpl::getThreadEntry() const 
     auto const entryNode = info->thread.program.pta.getDirectNodeOrNull(newContext, entryFunc);
     return {entryNode};
   } else if (auto entryInst = llvm::dyn_cast<llvm::Instruction>(entryVal)) {
+    // we do NOT evolve the context here because to do so would lead to only negative results
+    // we need the scopes to be the same so that the arrays written to are the same
     auto const newContext = info->context;
     auto const entryNode = info->thread.program.pta.getDirectNodeOrNull(newContext, entryInst->getFunction());
     return {entryNode};

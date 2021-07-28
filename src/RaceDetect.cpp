@@ -105,8 +105,7 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
       //  but will not miss races according to how Clang generates OpenMP code (as of clang 10.0.1)
       if (ompAnalysis.isInLastprivate(write) && ompAnalysis.isInLastprivate(other)) return;
 
-      // SIMD clashing write events are false-positive; this is not a case that will happen because the writes
-      // will be vectorised
+      // SIMD clashing write events are false-positive; this is not a race case because the writes will be vectorised
       if (race::OpenMPAnalysis::isSameSIMDWrite(write, other)) return;
     }
 

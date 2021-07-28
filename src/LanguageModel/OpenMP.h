@@ -91,6 +91,8 @@ inline bool isUnsetNestLock(const llvm::StringRef& funcName) { return funcName.e
 inline bool isOrderedStart(const llvm::StringRef& funcName) { return funcName.equals("__kmpc_ordered"); }
 inline bool isOrderedEnd(const llvm::StringRef& funcName) { return funcName.equals("__kmpc_end_ordered"); }
 
+// we may discover that this implementation is false positive prone
+// if so, there is no way to reliably identify blocks which should be SIMD without altering LLVM
 inline bool isSimdBlock(const llvm::BasicBlock* block) {
   return !block->getParent()->getName().startswith(".omp_outlined") && block->hasName() &&
          block->getName().startswith("omp.inner.for.body");
