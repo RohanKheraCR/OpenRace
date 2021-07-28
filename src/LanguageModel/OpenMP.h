@@ -91,6 +91,11 @@ inline bool isUnsetNestLock(const llvm::StringRef& funcName) { return funcName.e
 inline bool isOrderedStart(const llvm::StringRef& funcName) { return funcName.equals("__kmpc_ordered"); }
 inline bool isOrderedEnd(const llvm::StringRef& funcName) { return funcName.equals("__kmpc_end_ordered"); }
 
+inline bool isSimdBlock(const llvm::BasicBlock* block) {
+  return !block->getParent()->getName().startswith(".omp_outlined") && block->hasName() &&
+         block->getName().startswith("omp.inner.for.body");
+}
+
 // Return true for omp calls that do not need to be modelled (e.g. push_num_threads)
 inline bool isNoEffect(const llvm::StringRef& funcName) {
   return matchesAny(funcName, {"__kmpc_push_num_threads", "__kmpc_global_thread_num", "__kmpc_copyprivate",

@@ -74,9 +74,10 @@ TEST_LL("DRB023", "DRB023-sections1-orig-yes.ll",
         EXPECTED("DRB023-sections1-orig-yes.c:58:7 DRB023-sections1-orig-yes.c:60:7",
                  "DRB023-sections1-orig-yes.c:60:7 DRB023-sections1-orig-yes.c:58:7"))
 
-// DRB 24 and 25 are simd
-// TEST_LL("DRB024", /*TODO*/, EXPECTED(/*TODO*/))
-// TEST_LL("DRB025", /*TODO*/, EXPECTED(/*TODO*/))
+TEST_LL("DRB024", "DRB024-simdtruedep-orig-yes.ll",
+        EXPECTED("DRB024-simdtruedep-orig-yes.c:66:11 DRB024-simdtruedep-orig-yes.c:66:12"))
+TEST_LL("DRB025", "DRB025-simdtruedep-var-yes.ll",
+        EXPECTED("DRB025-simdtruedep-var-yes.c:68:11 DRB025-simdtruedep-var-yes.c:68:12", ))
 
 TEST_LL("DRB026", "DRB026-targetparallelfor-orig-yes.ll",
         EXPECTED("DRB026-targetparallelfor-orig-yes.c:64:9 DRB026-targetparallelfor-orig-yes.c:64:10"))
@@ -146,8 +147,7 @@ TEST_LL("DRB067", "DRB067-restrictpointer1-orig-no.ll", NORACE)
 TEST_LL("DRB068", "DRB068-restrictpointer2-orig-no.ll", NORACE)
 TEST_LL("DRB069", "DRB069-sectionslock1-orig-no.ll", NORACE)
 
-// 70 simd
-// TEST_LL("DRB070", /*TODO*/, EXPECTED(/*TODO*/))
+TEST_LL("DRB070", "DRB070-simd1-orig-no.ll", NORACE)
 
 TEST_LL("DRB071", "DRB071-targetparallelfor-orig-no.ll", NORACE)
 
@@ -249,8 +249,8 @@ TEST_LL("DRB113", "DRB113-default-orig-no.ll", NORACE)
 // 114 omp if
 // TEST_LL("DRB114", /*TODO*/, EXPECTED(/*TODO*/))
 
-// 115 simd
-// TEST_LL("DRB115", /*TODO*/, EXPECTED(/*TODO*/))
+TEST_LL("DRB115", "DRB115-forsimd-orig-yes.ll",
+        EXPECTED("DRB115-forsimd-orig-yes.c:66:11 DRB115-forsimd-orig-yes.c:66:12"))
 
 // 116 target teams
 // TEST_LL("DRB116", /*TODO*/, EXPECTED(/*TODO*/))

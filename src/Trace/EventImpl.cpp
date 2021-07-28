@@ -34,8 +34,11 @@ std::vector<const pta::CallGraphNodeTy *> ForkEventImpl::getThreadEntry() const 
     auto const newContext = pta::CT::contextEvolve(info->context, fork->getInst());
     auto const entryNode = info->thread.program.pta.getDirectNodeOrNull(newContext, entryFunc);
     return {entryNode};
+  } else if (auto entryInst = llvm::dyn_cast<llvm::Instruction>(entryVal)) {
+    auto const newContext = info->context;
+    auto const entryNode = info->thread.program.pta.getDirectNodeOrNull(newContext, entryInst->getFunction());
+    return {entryNode};
   }
-
   // the entry is indirect and we need to figure out where the real function is
   auto callsite = info->thread.program.pta.getInDirectCallSite(info->context, fork->getInst());
   auto const &nodes = callsite->getResolvedNode();

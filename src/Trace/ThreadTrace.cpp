@@ -110,6 +110,41 @@ bool isOpenMPTeamSpecific(const IR *ir) {
          type == IR::Type::OpenMPCriticalEnd || type == IR::Type::OpenMPSetLock || type == IR::Type::OpenMPUnsetLock;
 }
 
+void insertAndTraverseFork(std::vector<std::unique_ptr<const Event>> &events, const std::shared_ptr<const ForkIR> &fork,
+                           std::vector<std::unique_ptr<ThreadTrace>> &threads, TraceBuildState &state,
+                           std::shared_ptr<EventInfo> &einfo) {
+  events.push_back(std::make_unique<const ForkEventImpl>(fork, einfo, events.size()));
+
+  if (fork->type == IR::Type::OpenMPForkTeams) {
+    state.openmp.teamsDepth++;
+  }
+
+  // traverse this fork
+  auto event = events.back().get();
+  auto forkEvent = cast<ForkEvent>(event);
+
+  // maintain the current traversed tasks in state.openmp.unjoinedTasks
+  if (fork->type == IR::Type::OpenMPTaskFork) {
+    std::shared_ptr<const OpenMPTaskFork> task(fork, cast<OpenMPTaskFork>(fork.get()));
+    state.openmp.unjoinedTasks.emplace_back(forkEvent, task);
+  }
+
+  auto entries = forkEvent->getThreadEntry();
+  assert(!entries.empty());
+
+  // Heuristic: just choose first entry if there are more than one
+  // TODO: log if entries contained more than one possible entry
+  auto entry = entries.front();
+
+  auto const threadPosition = threads.size();
+  // build thread trace for this fork and all sub threads
+  auto subThread = std::make_unique<ThreadTrace>(forkEvent, entry, threads, state);
+  threads.insert(threads.begin() + threadPosition, std::move(subThread));
+
+  if (fork->type == IR::Type::OpenMPForkTeams) {
+    state.openmp.teamsDepth--;
+  }
+}
 // Called recursively to build list of events and thread traces
 // node      - the current callgraph node to traverse
 // thread    - the thread trace being built
@@ -120,7 +155,8 @@ bool isOpenMPTeamSpecific(const IR *ir) {
 // state     - used to track data across the construction of the entire program trace
 void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &thread, CallStack &callstack,
                       const pta::PTA &pta, std::vector<std::unique_ptr<const Event>> &events,
-                      std::vector<std::unique_ptr<ThreadTrace>> &threads, TraceBuildState &state) {
+                      std::vector<std::unique_ptr<ThreadTrace>> &threads, TraceBuildState &state,
+                      const ForkEvent *spawnEvent) {
   auto func = node->getTargetFun()->getFunction();
   if (callstack.contains(func)) {
     // prevent recursion
@@ -133,15 +169,51 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
     llvm::outs() << "Generating Func Sum: TID: " << thread.id << " Func: " << func->getName() << "\n";
   }
 
+  const llvm::Instruction *first = nullptr;
+  const llvm::Instruction *last = nullptr;
+  if (spawnEvent) {
+    first = llvm::dyn_cast<llvm::Instruction>(spawnEvent->getIRInst()->getThreadEntry());
+    if (spawnEvent->getIRInst()->getThreadExit().has_value()) {
+      last = llvm::dyn_cast<llvm::Instruction>(*spawnEvent->getIRInst()->getThreadExit());
+    }
+  }
   auto const &summary = *state.builder.getFunctionSummary(func);
 
   auto const context = node->getContext();
   auto einfo = std::make_shared<EventInfo>(thread, context);
 
-  for (auto const &ir : summary) {
+  state.skipUntil = first;
+  const llvm::Instruction *lastCompleted = nullptr;
+  for (auto irIter = summary.begin(); irIter != summary.end() && (!last || last != lastCompleted); irIter++) {
+    auto const &ir = *irIter;
+    lastCompleted = ir->getInst();
     if (shouldSkipIR(ir, state)) {
       continue;
     }
+
+    if (auto block = ir->getInst()->getParent(); OpenMPModel::isSimdBlock(block) && (!first || first->getParent() != block)) {
+      auto prev = ir->getInst();
+      auto end = std::next(irIter, 1);
+      while (end != summary.end() && end->get()->getInst()->getParent() == block) {
+        prev = end->get()->getInst();
+        end++;
+      }
+      auto fork0 = std::make_shared<OMPSIMDFork>(0, ir->getInst(), prev);
+      auto fork1 = std::make_shared<OMPSIMDFork>(1, ir->getInst(), prev);
+      insertAndTraverseFork(events, fork0, threads, state, einfo);
+      insertAndTraverseFork(events, fork1, threads, state, einfo);
+      events.push_back(
+          std::make_unique<const JoinEventImpl>(std::make_shared<OMPSIMDJoin>(std::move(fork0)), einfo, events.size()));
+      events.push_back(
+          std::make_unique<const JoinEventImpl>(std::make_shared<OMPSIMDJoin>(std::move(fork1)), einfo, events.size()));
+      if (end == summary.end()) {
+        break;  // we're done here
+      } else {
+        state.skipUntil = end->get()->getInst();
+      }
+      continue;
+    }
+
     // Skip OpenMP synchronizations that have no affect across teams
     // TODO: How should single/master be modeled?
     if (state.openmp.inTeamsRegion() && isOpenMPTeamSpecific(ir.get())) {
@@ -161,37 +233,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       }
 
       std::shared_ptr<const ForkIR> fork(ir, forkIR);
-      events.push_back(std::make_unique<const ForkEventImpl>(fork, einfo, events.size()));
-
-      if (forkIR->type == IR::Type::OpenMPForkTeams) {
-        state.openmp.teamsDepth++;
-      }
-
-      // traverse this fork
-      auto event = events.back().get();
-      auto forkEvent = llvm::cast<ForkEvent>(event);
-
-      // maintain the current traversed tasks in state.openmp.unjoinedTasks
-      if (forkIR->type == IR::Type::OpenMPTaskFork) {
-        std::shared_ptr<const OpenMPTaskFork> task(fork, llvm::cast<OpenMPTaskFork>(fork.get()));
-        state.openmp.unjoinedTasks.emplace_back(forkEvent, task);
-      }
-
-      auto entries = forkEvent->getThreadEntry();
-      assert(!entries.empty());
-
-      // Heuristic: just choose first entry if there are more than one
-      // TODO: log if entries contained more than one possible entry
-      auto entry = entries.front();
-
-      auto const threadPosition = threads.size();
-      // build thread trace for this fork and all sub threads
-      auto subThread = std::make_unique<ThreadTrace>(forkEvent, entry, threads, state);
-      threads.insert(threads.begin() + threadPosition, std::move(subThread));
-
-      if (forkIR->type == IR::Type::OpenMPForkTeams) {
-        state.openmp.teamsDepth--;
-      }
+      insertAndTraverseFork(events, fork, threads, state, einfo);
 
     } else if (auto joinIR = llvm::dyn_cast<JoinIR>(ir.get())) {
       // insert task joins for state.unjoinedTasks before the end of this omp parallel region
@@ -250,7 +292,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
       }
 
       events.push_back(std::make_unique<const EnterCallEventImpl>(call, einfo, events.size()));
-      traverseCallNode(directNode, thread, callstack, pta, events, threads, state);
+      traverseCallNode(directNode, thread, callstack, pta, events, threads, state, nullptr);
       events.push_back(std::make_unique<const LeaveCallEventImpl>(call, einfo, events.size()));
     } else {
       llvm_unreachable("Should cover all IR types");
@@ -263,10 +305,11 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
 std::vector<std::unique_ptr<const Event>> buildEventTrace(const ThreadTrace &thread, const pta::CallGraphNodeTy *entry,
                                                           const pta::PTA &pta,
                                                           std::vector<std::unique_ptr<ThreadTrace>> &threads,
-                                                          TraceBuildState &state) {
+                                                          TraceBuildState &state,
+                                                          const ForkEvent *spawningEvent = nullptr) {
   std::vector<std::unique_ptr<const Event>> events;
   CallStack callstack;
-  traverseCallNode(entry, thread, callstack, pta, events, threads, state);
+  traverseCallNode(entry, thread, callstack, pta, events, threads, state, spawningEvent);
   return events;
 }
 }  // namespace
@@ -282,7 +325,7 @@ ThreadTrace::ThreadTrace(const ForkEvent *spawningEvent, const pta::CallGraphNod
     : id(++state.currentTID),
       program(spawningEvent->getThread().program),
       spawnSite(spawningEvent),
-      events(buildEventTrace(*this, entry, program.pta, threads, state)) {
+      events(buildEventTrace(*this, entry, program.pta, threads, state, spawningEvent)) {
   auto const entries = spawningEvent->getThreadEntry();
   auto it = std::find(entries.begin(), entries.end(), entry);
   // entry mut be one of the entries from the spawning event

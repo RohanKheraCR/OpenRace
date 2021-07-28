@@ -1025,3 +1025,8 @@ bool OpenMPAnalysis::insideCompatibleSections(const Event *event1, const Event *
 
   return false;
 }
+
+bool OpenMPAnalysis::isSameSIMDWrite(const Event *event1, const Event *event2) {
+  return OpenMPModel::isSimdBlock(event1->getInst()->getParent()) && event1->type == Event::Type::Write &&
+         event2->type == Event::Type::Write && event1->getInst() == event2->getInst();
+}

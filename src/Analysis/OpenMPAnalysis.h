@@ -138,6 +138,9 @@ class OpenMPAnalysis {
   // return true if both events are in compatible sections
   static bool insideCompatibleSections(const Event* event1, const Event* event2);
 
+  // return true if this is simd and is the same write event
+  static bool isSameSIMDWrite(const Event* event1, const Event* event2);
+
   // return true if both events are gauranteed to execute on the same thread
   // by a check against omp_get_thread_num
   bool guardedBySameTid(const Event* event1, const Event* event2) const {

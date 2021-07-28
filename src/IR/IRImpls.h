@@ -13,6 +13,8 @@ limitations under the License.
 #include <LanguageModel/OpenMP.h>
 #include <llvm/IR/CallSite.h>
 
+#include <utility>
+
 #include "IR/IR.h"
 
 namespace race {
@@ -208,6 +210,41 @@ class OpenMPForkTeams : public ForkIR {
   static inline bool classof(const IR *e) { return e->type == Type::OpenMPForkTeams; }
 };
 
+class OMPSIMDFork : public ForkIR {
+  const llvm::Constant *handle;
+  const llvm::Instruction *entry;
+  const llvm::Instruction *exit;
+
+ public:
+  OMPSIMDFork(size_t handleno, const llvm::Instruction *entry, const llvm::Instruction *exit)
+      : ForkIR(Type::OpenMPSIMDFork),
+        handle(llvm::Constant::getIntegerValue(llvm::IntegerType::get(entry->getContext(), sizeof(size_t) * 8),
+                                               llvm::APInt(sizeof(size_t) * 8, handleno))),
+        entry(entry),
+        exit(exit) {}
+
+  [[nodiscard]] inline const llvm::CallBase *getInst() const override { return nullptr; }
+
+  [[nodiscard]] const llvm::Value *getThreadHandle() const override { return handle; }
+
+  [[nodiscard]] const llvm::Instruction *getThreadEntry() const override { return entry; }
+
+  [[nodiscard]] std::optional<const llvm::Value *> getThreadExit() const override {
+    if (exit) {
+      return std::optional<const llvm::Instruction *>(exit);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  // Used for llvm style RTTI (isa, dyn_cast, etc.)
+  static inline bool classof(const IR *e) { return e->type == Type::OpenMPSIMDFork; }
+
+  void print(llvm::raw_ostream &os) const override {
+    os << "IR OpenMPSIMDFork - " << this->getThreadEntry()->getParent()->getName();
+  }
+};
+
 // ==================================================================
 // ================== JoinIR Implementations ========================
 // ==================================================================
@@ -273,6 +310,24 @@ class OpenMPJoinTeams : public JoinIR {
 
   // Used for llvm style RTTI (isa, dyn_cast, etc.)
   static inline bool classof(const IR *e) { return e->type == Type::OpenMPJoinTeams; }
+};
+
+class OMPSIMDJoin : public JoinIR {
+  std::shared_ptr<OMPSIMDFork> fork;
+
+ public:
+  explicit OMPSIMDJoin(std::shared_ptr<OMPSIMDFork> fork) : JoinIR(Type::OpenMPSIMDJoin), fork(std::move(fork)) {}
+
+  [[nodiscard]] inline const llvm::CallBase *getInst() const override { return fork->getInst(); }
+
+  [[nodiscard]] const llvm::Value *getThreadHandle() const override { return fork->getThreadHandle(); }
+
+  // Used for llvm style RTTI (isa, dyn_cast, etc.)
+  static inline bool classof(const IR *e) { return e->type == Type::OpenMPSIMDJoin; }
+
+  void print(llvm::raw_ostream &os) const override {
+    os << "IR OpenMPSIMDJoin - " << this->fork->getThreadEntry()->getParent()->getName();
+  }
 };
 
 // ==================================================================
