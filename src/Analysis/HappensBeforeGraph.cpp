@@ -229,6 +229,45 @@ HappensBeforeGraph::HappensBeforeGraph(const race::ProgramTrace &program) {
       }
     }
   }
+
+  std::set<EventPID> allSrcs;
+  for (auto const &thread : threadSyncs) {
+    std::copy(thread.second.begin(), thread.second.end(), std::inserter(allSrcs, allSrcs.end()));
+  }
+
+  for (auto src : allSrcs) {
+    std::deque<EventPID> worklist;
+    std::set<EventPID> visited;
+
+    auto const addToWorklist = [&worklist, &visited](EventPID node) {
+      // Only add to worklist if not already visited
+      if (visited.find(node) != visited.end()) {
+        return;
+      }
+      worklist.push_back(node);
+    };
+
+    addToWorklist(src);
+    while (!worklist.empty()) {
+      auto const node = worklist.front();
+      visited.insert(node);
+      worklist.pop_front();
+
+      // Add next nodes from sync edges
+      if (auto it = syncEdges.find(node); it != syncEdges.end()) {
+        for (auto const next : it->second) {
+          addToWorklist(next);
+        }
+      }
+
+      // Add next sync event after this one on same thread
+      if (auto opt = findNextSyncAfter(node); opt.has_value()) {
+        addToWorklist(opt.value());
+      }
+    }
+
+    syncReachable.emplace(src, visited);
+  }
 }
 
 void HappensBeforeGraph::addSync(const Event *syncEvent) {
@@ -269,44 +308,13 @@ bool HappensBeforeGraph::canReach(const Event *src, const Event *dst) const {
     return true;
   }
 
-  return syncEdgesDFS(srcSync.value(), dstSync.value());
+  return isReachable(srcSync.value(), dstSync.value());
 }
 
-bool HappensBeforeGraph::syncEdgesDFS(HappensBeforeGraph::EventPID src, HappensBeforeGraph::EventPID dst) const {
-  std::vector<EventPID> worklist;
-  std::set<EventPID> visited;
-
-  auto const addToWorklist = [&worklist, &visited](EventPID node) {
-    // Only add to worklist if not already visited
-    if (visited.find(node) != visited.end()) {
-      return;
-    }
-    worklist.push_back(node);
-  };
-
-  addToWorklist(src);
-  while (!worklist.empty()) {
-    auto const node = worklist.back();
-    visited.insert(node);
-    worklist.pop_back();
-
-    if (node == dst || hasEdge(src, dst)) {
-      return true;
-    }
-
-    // Add next nodes from sync edges
-    if (auto it = syncEdges.find(node); it != syncEdges.end()) {
-      for (auto const next : it->second) {
-        addToWorklist(next);
-      }
-    }
-
-    // Add next sync event after this one on same thread
-    if (auto opt = findNextSyncAfter(node); opt.has_value()) {
-      addToWorklist(opt.value());
-    }
+bool HappensBeforeGraph::isReachable(EventPID src, EventPID dst) const {
+  if (auto const reachable = syncReachable.find(src); reachable != syncReachable.end()) {
+    return reachable->second.find(dst) != reachable->second.end();
   }
-
   return false;
 }
 
