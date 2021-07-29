@@ -13,6 +13,7 @@ limitations under the License.
 
 #include <llvm/Passes/PassBuilder.h>
 
+#include "Analysis/SimpleArrayAnalysis.h"
 #include "Trace/Event.h"
 #include "Trace/ThreadTrace.h"
 
@@ -68,7 +69,7 @@ class SimpleGetThreadNumAnalysis {
   std::optional<u_int64_t> getGuardedBy(const Event* event) const;
 
  public:
-  SimpleGetThreadNumAnalysis(const ProgramTrace& program);
+  explicit SimpleGetThreadNumAnalysis(const ProgramTrace& program);
 
   // Check if both events are guaranteed to be executed by a particular thread
   // via a branch on omp_get_thread_num checked against a constant value
@@ -86,7 +87,7 @@ class LastprivateAnalysis {
   std::set<const llvm::BasicBlock*> computeLastprivateBlocks(const llvm::Function& func);
 
  public:
-  LastprivateAnalysis(const llvm::Module& module);
+  explicit LastprivateAnalysis(const llvm::Module& module);
 
   [[nodiscard]] inline bool isGuarded(const llvm::BasicBlock* block) const {
     return lastprivateBlocks.find(block) != lastprivateBlocks.end();
@@ -100,6 +101,7 @@ class OpenMPAnalysis {
   ReduceAnalysis reduceAnalysis;
   SimpleGetThreadNumAnalysis getThreadNumAnalysis;
   LastprivateAnalysis lastprivate;
+  SimpleArrayAnalysis arrayAnalysis;
 
   // Start/End of omp loop
   using LoopRegion = Region;
@@ -110,19 +112,11 @@ class OpenMPAnalysis {
   // get cached list of loop regions, else create them
   const std::vector<LoopRegion>& getOmpForLoops(const ThreadTrace& trace);
 
+  // return true if this event is in a omp for loop
   bool inParallelFor(const race::MemAccessEvent* event);
 
  public:
-  OpenMPAnalysis(const ProgramTrace& program);
-
-  // return true if events are array accesses who's access sets could overlap
-  bool canIndexOverlap(const race::MemAccessEvent* event1, const race::MemAccessEvent* event2);
-
-  // return true if both events are array accesses in an omp loop
-  bool isLoopArrayAccess(const race::MemAccessEvent* event1, const race::MemAccessEvent* event2);
-
-  // return true if event is an array access, not every getelementptr is an array access
-  bool isArrayAccess(const llvm::GetElementPtrInst* gep);
+  explicit OpenMPAnalysis(const ProgramTrace& program);
 
   // return true if both events are part of the same omp team
   bool fromSameParallelRegion(const Event* event1, const Event* event2) const;
@@ -145,6 +139,9 @@ class OpenMPAnalysis {
   }
 
   bool isInLastprivate(const Event* event) const { return lastprivate.isGuarded(event->getInst()->getParent()); }
+
+  // return true if both events are array accesses in an omp loop and their access sets cannot overlap
+  bool isNonOverlappingLoopAccess(const MemAccessEvent* event1, const MemAccessEvent* event2);
 };
 
 }  // namespace race
