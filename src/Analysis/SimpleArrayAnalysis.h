@@ -11,19 +11,26 @@ limitations under the License.
 
 #pragma once
 
-#include "LanguageModel/RaceModel.h"
-#include "Trace/ProgramTrace.h"
+#include <Trace/Event.h>
+#include <llvm/Passes/PassBuilder.h>
 
 namespace race {
 
-class LockSet {
- private:
-  std::map<const Event *, std::multiset<const llvm::Value *>> cache;
-  std::multiset<const llvm::Value *> heldLocks(const Event *targetEvent);
+class SimpleArrayAnalysis {
+  llvm::PassBuilder PB;
+  llvm::FunctionAnalysisManager FAM;
 
  public:
-  explicit LockSet(const ProgramTrace &program);
+  SimpleArrayAnalysis();
 
-  [[nodiscard]] bool sharesLock(const MemAccessEvent *lhs, const MemAccessEvent *rhs);
+  // return true if events are array accesses who's access sets could overlap
+  bool canIndexOverlap(const race::MemAccessEvent* event1, const race::MemAccessEvent* event2);
+
+  // return true if both events are array accesses in an omp loop
+  bool isLoopArrayAccess(const race::MemAccessEvent* event1, const race::MemAccessEvent* event2);
+
+  // return true if event is an array access, not every getelementptr is an array access
+  bool isArrayAccess(const llvm::GetElementPtrInst* gep);
 };
+
 }  // namespace race
