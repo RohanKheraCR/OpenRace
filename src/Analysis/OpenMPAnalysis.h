@@ -59,21 +59,27 @@ class SimpleGetThreadNumAnalysis {
   // simple implementation can only handle one block being guarded
   std::map<const llvm::BasicBlock*, u_int64_t> guardedBlocks;
 
+  // map of functions to the tid they are guarded, cached by getGuardedBy()
+  std::map<const llvm::Function*, int64_t> cached;
+
   // compute any guarded blocks for this omp_get_thread call and add them to the guardedBlocks map
   void computeGuardedBlocks(const Event* event);
 
   // set of get_thread_num calls who's guarded blocks have already been computed
   std::set<const llvm::Instruction*> visited;
 
+  // compute and cache the tid that guards this fn or none if not exist
+  std::optional<u_int64_t> computeGuardedFns(const Function* fn);
+
   // Get the tid that guards this event or None if it is not guarded
-  std::optional<u_int64_t> getGuardedBy(const Event* event) const;
+  std::optional<u_int64_t> getGuardedBy(const Event* event);
 
  public:
   explicit SimpleGetThreadNumAnalysis(const ProgramTrace& program);
 
   // Check if both events are guaranteed to be executed by a particular thread
   // via a branch on omp_get_thread_num checked against a constant value
-  bool guardedBySameTid(const Event* event1, const Event* event2) const;
+  bool guardedBySameTid(const Event* event1, const Event* event2);
 };
 
 class LastprivateAnalysis {
@@ -134,7 +140,7 @@ class OpenMPAnalysis {
 
   // return true if both events are gauranteed to execute on the same thread
   // by a check against omp_get_thread_num
-  bool guardedBySameTid(const Event* event1, const Event* event2) const {
+  bool guardedBySameTid(const Event* event1, const Event* event2) {
     return getThreadNumAnalysis.guardedBySameTid(event1, event2);
   }
 

@@ -402,6 +402,38 @@ std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *bran
   return guardedBlocks;
 }
 
+// return true if fn can finally call target along its call chains
+bool canReachTarget(llvm::Function *fn, const llvm::Function *target) {
+  for (auto const &basicblock : fn->getBasicBlockList()) {
+    for (auto it = basicblock.begin(), end = basicblock.end(); it != end; ++it) {
+      if (auto call = llvm::dyn_cast<llvm::CallBase>(it)) {
+        if (call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// return the guarded thread id if we can find target when searching along the call chains starting from the calls in
+// guardedBlocks
+std::optional<u_int64_t> canReachTopDown(std::map<const BasicBlock *, u_int64_t> guardedBlocks,
+                                         const llvm::Function *target) {
+  for (auto guardedBlock : guardedBlocks) {
+    auto bb = guardedBlock.first;
+    for (auto it = bb->begin(); it != bb->end(); it++) {
+      if (auto call = llvm::dyn_cast<llvm::CallBase>(it)) {
+        if (call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target)) {
+          return guardedBlock.second;
+        }
+      }
+    }
+  }
+
+  return std::nullopt;
+}
+
 }  // namespace
 
 void SimpleGetThreadNumAnalysis::computeGuardedBlocks(const Event *event) {
@@ -435,10 +467,34 @@ void SimpleGetThreadNumAnalysis::computeGuardedBlocks(const Event *event) {
   visited.insert(call);
 }
 
-std::optional<u_int64_t> SimpleGetThreadNumAnalysis::getGuardedBy(const Event *event) const {
+// check if we have this fn in the cache
+std::optional<u_int64_t> SimpleGetThreadNumAnalysis::computeGuardedFns(const llvm::Function *fn) {
+  auto guardedFn = cached.find(fn);
+  if (guardedFn->second == -1) {
+    return std::nullopt;
+  }
+  if (guardedFn == cached.end()) {
+    // check if event is from an interprocedure call within a guarded block
+    auto guardedTID = canReachTopDown(guardedBlocks, fn);
+    if (guardedTID.has_value()) {
+      auto tid = guardedTID.value();
+      cached[fn] = static_cast<int64_t>(tid);
+      return tid;
+    } else {
+      cached[fn] = -1;
+      return std::nullopt;
+    }
+  }
+  return guardedFn->second;
+}
+
+std::optional<u_int64_t> SimpleGetThreadNumAnalysis::getGuardedBy(const Event *event) {
   // check if this event's block is guarded
-  auto guarded = guardedBlocks.find(event->getInst()->getParent());
-  if (guarded == guardedBlocks.end()) return std::nullopt;
+  auto bb = event->getInst()->getParent();
+  auto guarded = guardedBlocks.find(bb);
+  if (guarded == guardedBlocks.end()) {
+    return computeGuardedFns(bb->getParent());
+  }
   return guarded->second;
 }
 
@@ -452,7 +508,7 @@ SimpleGetThreadNumAnalysis::SimpleGetThreadNumAnalysis(const ProgramTrace &progr
   }
 }
 
-bool SimpleGetThreadNumAnalysis::guardedBySameTid(const Event *event1, const Event *event2) const {
+bool SimpleGetThreadNumAnalysis::guardedBySameTid(const Event *event1, const Event *event2) {
   auto tid1 = getGuardedBy(event1);
   if (!tid1.has_value()) return false;
 
