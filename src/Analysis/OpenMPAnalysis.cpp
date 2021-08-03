@@ -402,33 +402,32 @@ std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *bran
   return guardedBlocks;
 }
 
+bool canReachTarget(llvm::Function *fn, const llvm::Function *target);
+
+bool reach(const BasicBlock &basicblock, const llvm::Function *target) {
+  auto callsite = std::find_if(basicblock.begin(), basicblock.end(), [target](const llvm::Instruction &inst) {
+    auto call = llvm::dyn_cast<llvm::CallBase>(&inst);
+    return call ? call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target) : false;
+  });
+  return callsite != basicblock.end();
+}
+
 // return true if fn can finally call target along its call chains
 bool canReachTarget(llvm::Function *fn, const llvm::Function *target) {
   for (auto const &basicblock : fn->getBasicBlockList()) {
-    for (auto it = basicblock.begin(), end = basicblock.end(); it != end; ++it) {
-      if (auto call = llvm::dyn_cast<llvm::CallBase>(it)) {
-        if (call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target)) {
-          return true;
-        }
-      }
-    }
+    if (reach(basicblock, target)) return true;
   }
   return false;
 }
 
-// return the guarded thread id if we can find target when searching along the call chains starting from the calls in
-// guardedBlocks
-std::optional<u_int64_t> canReachTopDown(std::map<const BasicBlock *, u_int64_t> guardedBlocks,
+// return the guarded thread id if target can be reached when searching along the call chains
+// starting from the calls in guardedBlocks
+std::optional<u_int64_t> canReachTopDown(std::map<const BasicBlock *, u_int64_t> &guardedBlocks,
                                          const llvm::Function *target) {
+  // assertion: threads of the same guarded block are identical (the part within the guarded block)
   for (auto guardedBlock : guardedBlocks) {
     auto bb = guardedBlock.first;
-    for (auto it = bb->begin(); it != bb->end(); it++) {
-      if (auto call = llvm::dyn_cast<llvm::CallBase>(it)) {
-        if (call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target)) {
-          return guardedBlock.second;
-        }
-      }
-    }
+    if (reach(*(bb), target)) return guardedBlock.second;
   }
 
   return std::nullopt;
@@ -467,25 +466,26 @@ void SimpleGetThreadNumAnalysis::computeGuardedBlocks(const Event *event) {
   visited.insert(call);
 }
 
-// check if we have this fn in the cache
 std::optional<u_int64_t> SimpleGetThreadNumAnalysis::computeGuardedFns(const llvm::Function *fn) {
   auto guardedFn = cached.find(fn);
-  if (guardedFn->second == -1) {
+  if (guardedFn->second == -1) {  // the cached result is no guard
     return std::nullopt;
   }
-  if (guardedFn == cached.end()) {
-    // check if event is from an interprocedure call within a guarded block
-    auto guardedTID = canReachTopDown(guardedBlocks, fn);
-    if (guardedTID.has_value()) {
-      auto tid = guardedTID.value();
-      cached[fn] = static_cast<int64_t>(tid);
-      return tid;
-    } else {
-      cached[fn] = -1;
-      return std::nullopt;
-    }
+  if (guardedFn != cached.end()) {  // return cached result
+    return guardedFn->second;
   }
-  return guardedFn->second;
+
+  // check if event is from an interprocedure call from a guarded block
+  auto guardedTID = canReachTopDown(guardedBlocks, fn);
+  if (guardedTID.has_value()) {
+    auto tid = guardedTID.value();
+    cached[fn] = static_cast<int64_t>(tid);
+    return tid;
+  }
+
+  // fn does not have any guarded block
+  cached[fn] = -1;
+  return std::nullopt;
 }
 
 std::optional<u_int64_t> SimpleGetThreadNumAnalysis::getGuardedBy(const Event *event) {
