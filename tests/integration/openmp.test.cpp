@@ -73,6 +73,7 @@ TEST_LL("get-thread-num-yes", "get-thread-num-yes.ll",
         EXPECTED("get-thread-num-yes.c:12:14 get-thread-num-yes.c:12:14",
                  "get-thread-num-yes.c:12:14 get-thread-num-yes.c:12:14"))
 TEST_LL("get-thread-num-interproc-no", "get-thread-num-interproc-no.ll", NORACE)
+TEST_LL("get-thread-num-interproc-no2", "get-thread-num-interproc-no2.ll", NORACE)
 TEST_LL("get-thread-num-interproc-yes", "get-thread-num-interproc-yes.ll",
         EXPECTED("get-thread-num-interproc-yes.c:4:44 get-thread-num-interproc-yes.c:4:44"))
 TEST_LL("get-thread-num-loop-no", "get-thread-num-loop-no.ll", NORACE)

@@ -11,6 +11,7 @@ limitations under the License.
 
 #include "Trace/ThreadTrace.h"
 
+#include "Analysis/OpenMP/OpenMP.h"
 #include "EventImpl.h"
 #include "IR/IRImpls.h"
 #include "Trace/CallStack.h"
@@ -47,98 +48,12 @@ bool isOpenMPMasterThread(const ThreadTrace &thread) {
   return ompThread->isForkingMaster();
 }
 
-// Get any icmp_eq insts that use this value and compare against a constant integer
-// return list of pairs (cmp, c) where cmp is the cmpInst and c is the constant value compared against
-std::vector<std::pair<const llvm::CmpInst *, ThreadID>> getConstCmpEqInsts(const llvm::Value *value) {
-  std::vector<std::pair<const llvm::CmpInst *, ThreadID>> result;
-
-  std::vector<const llvm::User *> worklist;
-
-  for (auto user : value->users()) {
-    worklist.push_back(user);
-  }
-
-  while (!worklist.empty()) {
-    auto const user = worklist.back();
-    worklist.pop_back();
-
-    // follow loads
-    if (auto load = llvm::dyn_cast<llvm::LoadInst>(user)) {
-      std::copy(load->users().begin(), load->users().end(), std::back_inserter(worklist));
-      continue;
-    }
-
-    if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(user)) {
-      if (cmp->getPredicate() != llvm::CmpInst::Predicate::ICMP_EQ) continue;
-
-      if (auto val = llvm::dyn_cast<llvm::ConstantInt>(cmp->getOperand(1))) {
-        result.emplace_back(cmp, val->getZExtValue());
-        continue;
-      }
-
-      if (auto val = llvm::dyn_cast<llvm::ConstantInt>(cmp->getOperand(0))) {
-        result.emplace_back(cmp, val->getZExtValue());
-        continue;
-      }
-    }
-  }
-
-  return result;
-}
-
-// Get list of blocks guarded by one case of this branch.
-// branch arg decides if checking for blocks guarded by true or false branch
-// Start by assuming the target block is guarded
-// Iterate from the target block until we find a block that has an unguarded predecessor
-// Cannot handle loops
-std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch = true) {
-  // This branch should use a cmp eq instruction
-  // Otherwise the true/false blocks below may be wrong
-  assert(llvm::isa<llvm::CmpInst>(branchInst->getOperand(0)));
-  assert(llvm::cast<llvm::CmpInst>(branchInst->getOperand(0))->getPredicate() == llvm::CmpInst::Predicate::ICMP_EQ);
-
-  auto trueBlock = llvm::cast<llvm::BasicBlock>(branchInst->getOperand(2));
-  auto falseBlock = llvm::cast<llvm::BasicBlock>(branchInst->getOperand(1));
-
-  auto const targetBlock = (branch) ? trueBlock : falseBlock;
-
-  // This will be the returned result
-  std::set<const llvm::BasicBlock *> guardedBlocks;
-  guardedBlocks.insert(targetBlock);
-
-  std::set<const llvm::BasicBlock *> visited;
-  std::vector<const llvm::BasicBlock *> worklist;
-
-  visited.insert(targetBlock);
-  std::copy(succ_begin(targetBlock), succ_end(targetBlock), std::back_inserter(worklist));
-
-  do {
-    auto const currentBlock = worklist.back();
-    worklist.pop_back();
-
-    auto hasUnguardedPred = std::any_of(
-        pred_begin(currentBlock), pred_end(currentBlock),
-        [&guardedBlocks](const llvm::BasicBlock *pred) { return guardedBlocks.find(pred) == guardedBlocks.end(); });
-
-    if (hasUnguardedPred) continue;
-    visited.insert(currentBlock);
-
-    guardedBlocks.insert(currentBlock);
-
-    for (auto next : successors(currentBlock)) {
-      if (visited.find(next) == visited.end()) {
-        worklist.push_back(next);
-      }
-    }
-
-  } while (!worklist.empty());
-
-  return guardedBlocks;
-}
-
-void computeGuardedBlocks(const Instruction *call, TraceBuildState &state) {
+// return true if we can find a cmp IR after this call
+bool computeGuardedBlocks(const Instruction *call, TraceBuildState &state) {
   // Check if we have already computed guardedBlocks for this omp_get_thread_num call
-  if (state.openmp.visited.find(call) != state.openmp.visited.end()) return;
+  if (state.openmp.visited.find(call) != state.openmp.visited.end()) {
+    return state.openmp.existGuards.find(call) != state.openmp.existGuards.end();
+  }
 
   // Find all cmpInsts that compare the omp_get_thread_num call to a const value
   auto const cmpInsts = getConstCmpEqInsts(call);
@@ -156,14 +71,18 @@ void computeGuardedBlocks(const Instruction *call, TraceBuildState &state) {
 
       // insert the blocks into the guardedBlocks map
       for (auto const block : guarded) {
-        llvm::outs() << block->getName();
         state.openmp.guardedBlocks[block] = tid;
       }
+
+      // cache the result
+      state.openmp.existGuards.insert(call);
     }
   }
 
   // Mark this omp_get_thread_num call as visited
   state.openmp.visited.insert(call);
+
+  return cmpInsts.empty() ? false : true;
 }
 
 // handle omp single/master events and other omp events
@@ -205,8 +124,8 @@ bool handleOMPEvents(const CallIR *callIR, TraceBuildState &state, bool isMaster
     }
     case IR::Type::OpenMPGetThreadNum: {
       // this sequence of calls can be moved to state after refactoring
-      computeGuardedBlocks(callIR->getInst(), state);
-      state.openmp.checkGuardedBlock = true;
+      bool foundBlock = computeGuardedBlocks(callIR->getInst(), state);
+      state.openmp.checkGuardedBlock = state.openmp.checkGuardedBlock || foundBlock;
       return false;
     }
     default: {
@@ -235,8 +154,20 @@ bool isOpenMPTeamSpecific(const IR *ir) {
          type == IR::Type::OpenMPCriticalEnd || type == IR::Type::OpenMPSetLock || type == IR::Type::OpenMPUnsetLock;
 }
 
-void handleGuardedBlock(OpenMPState::GuardResult ret, std::vector<std::unique_ptr<const Event>> &events,
-                        TraceBuildState &state, std::shared_ptr<struct EventInfo> &einfo) {
+// handle the guarded basic blocks from omp_get_thread_num
+void handleGuardedBlock(const llvm::Instruction *inst, std::vector<std::unique_ptr<const Event>> &events,
+                        TraceBuildState &state, std::shared_ptr<struct EventInfo> &einfo,
+                        const std::vector<std::shared_ptr<const IR>> &summary, int i) {
+  if (i >= 0) {  // check if exiting the current guarded block
+    if (i + 1 < summary.size()) {
+      auto const &nextIR = summary.at(i + 1);
+      if (inst->getParent() == nextIR->getInst()->getParent()) {
+        return;
+      }  // else: end of this basic block
+    }    // else: end of function
+  }
+
+  OpenMPState::GuardResult ret = state.openmp.checkGuardedBlocks(inst, i >= 0);
   switch (ret.typ) {
     case OpenMPState::GuardType::EnterGuard: {
       events.push_back(std::make_unique<const EnterGuardEventImpl>(einfo, ret.guardedTID.value(), events.size()));
@@ -280,7 +211,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
 
   for (unsigned int i = 0; i < summary.size(); i++) {
     auto const &ir = summary.at(i);
-    ir.get()->getInst()->print(llvm::outs(), true);
+    ir->getInst()->print(llvm::outs(), true);
     llvm::outs() << "\n";
 
     if (shouldSkipIR(ir, state)) {
@@ -293,8 +224,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
     }
 
     if (state.openmp.checkGuardedBlock) {  // check if entering a guarded block
-      OpenMPState::GuardResult ret = state.openmp.checkGuardedBlocks(ir->getInst(), false);
-      handleGuardedBlock(ret, events, state, einfo);
+      handleGuardedBlock(ir->getInst(), events, state, einfo, summary, -1);
     }
 
     if (auto readIR = llvm::dyn_cast<ReadIR>(ir.get())) {
@@ -395,6 +325,9 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
 
       if (directNode->getTargetFun()->isExtFunction()) {
         events.push_back(std::make_unique<ExternCallEventImpl>(call, einfo, events.size()));
+        if (state.openmp.checkGuardedBlock) {  // check if exiting the current guarded block
+          handleGuardedBlock(ir->getInst(), events, state, einfo, summary, i);
+        }
         continue;
       }
 
@@ -406,14 +339,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
     }
 
     if (state.openmp.checkGuardedBlock) {  // check if exiting the current guarded block
-      if (i + 1 < summary.size()) {
-        auto const &nextIR = summary.at(i + 1);
-        if (ir->getInst()->getParent() == nextIR->getInst()->getParent()) {
-          continue;
-        }  // else: end of this basic block
-      }    // else: end of function
-      OpenMPState::GuardResult ret = state.openmp.checkGuardedBlocks(ir->getInst(), true);
-      handleGuardedBlock(ret, events, state, einfo);
+      handleGuardedBlock(ir->getInst(), events, state, einfo, summary, i);
     }
   }
 

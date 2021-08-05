@@ -70,6 +70,10 @@ struct OpenMPState {
   // set of omp_get_thread_num calls who's guarded blocks have already been computed
   std::set<const llvm::Instruction *> visited;
 
+  // set of omp_get_thread_num calls who's guarded blocks have already been computed
+  // and the call HAS a corresponding guarded block
+  std::set<const llvm::Instruction *> existGuards;
+
   // whether we call updateGuardedBlocks to check if reach any guarded block entry/exit
   // update to true when see a compare IR after the call to omp_get_thread_num
   bool checkGuardedBlock = false;

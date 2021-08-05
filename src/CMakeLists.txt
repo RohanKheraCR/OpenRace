@@ -19,7 +19,7 @@ set(pta-lib-sources
     PointerAnalysis/Models/MemoryModel/CppMemModel/SpecialObject/Vector.cpp
     PointerAnalysis/Models/MemoryModel/CppMemModel/SpecialObject/VTablePtr.cpp
     PointerAnalysis/Models/LanguageModel/DefaultLangModel/DefaultLangModel.cpp
-)
+        Analysis/OpenMP/OpenMP.h)
 
 add_library(pta STATIC ${pta-lib-sources})
 target_link_libraries(pta ${llvm_libs} pthread)
@@ -41,6 +41,7 @@ endif()
 
 set(racedetect-lib-sources
     LanguageModel/RaceModel.cpp
+    Analysis/OpenMP/OpenMP.cpp
     Analysis/HappensBeforeGraph.cpp
     Analysis/LockSet.cpp
     Analysis/SharedMemory.cpp
