@@ -211,8 +211,6 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
 
   for (unsigned int i = 0; i < summary.size(); i++) {
     auto const &ir = summary.at(i);
-    ir->getInst()->print(llvm::outs(), true);
-    llvm::outs() << "\n";
 
     if (shouldSkipIR(ir, state)) {
       continue;

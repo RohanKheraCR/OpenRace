@@ -18,8 +18,7 @@ set(pta-lib-sources
     PointerAnalysis/Models/MemoryModel/CppMemModel/PreprocessingPasses/RewriteModeledAPIPass.cpp
     PointerAnalysis/Models/MemoryModel/CppMemModel/SpecialObject/Vector.cpp
     PointerAnalysis/Models/MemoryModel/CppMemModel/SpecialObject/VTablePtr.cpp
-    PointerAnalysis/Models/LanguageModel/DefaultLangModel/DefaultLangModel.cpp
-        Analysis/OpenMP/OpenMP.h)
+    PointerAnalysis/Models/LanguageModel/DefaultLangModel/DefaultLangModel.cpp)
 
 add_library(pta STATIC ${pta-lib-sources})
 target_link_libraries(pta ${llvm_libs} pthread)
