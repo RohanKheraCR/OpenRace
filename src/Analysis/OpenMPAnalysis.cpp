@@ -337,7 +337,7 @@ std::vector<Region> getRegions(const ThreadTrace &thread) {
   return regions;
 }
 
-// Get the innermost region that contains event
+// Get the only region that contains event
 template <Event::Type Start, Event::Type End>
 std::optional<Region> getContainingRegion(const Event *event) {
   if (!event) return std::nullopt;

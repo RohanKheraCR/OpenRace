@@ -81,6 +81,9 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
       return;
     }
 
+    // No race if guaranteed to be executed by same thread
+    if (ompAnalysis.inSameGuardedTID(write, other)) return;
+
     if (ompAnalysis.fromSameParallelRegion(write, other)) {
       // Non overlapping array accesses inside of an OpenMP loop are not races
       // e.g.
@@ -103,9 +106,6 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
       //  but will not miss races according to how Clang generates OpenMP code (as of clang 10.0.1)
       if (ompAnalysis.isInLastprivate(write) && ompAnalysis.isInLastprivate(other)) return;
     }
-
-    // No race if guaranteed to be executed by same thread
-    if (ompAnalysis.inSameGuardedTID(write, other)) return;
 
     // Race detected
     reporter.collect(write, other);

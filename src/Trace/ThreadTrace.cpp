@@ -123,7 +123,6 @@ bool handleOMPEvents(const CallIR *callIR, TraceBuildState &state, bool isMaster
       return false;
     }
     case IR::Type::OpenMPGetThreadNum: {
-      // this sequence of calls can be moved to state after refactoring
       bool foundBlock = computeGuardedBlocks(callIR->getInst(), state);
       state.openmp.checkGuardedBlock = state.openmp.checkGuardedBlock || foundBlock;
       return false;
