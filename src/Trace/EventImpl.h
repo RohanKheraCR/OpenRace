@@ -44,7 +44,7 @@ class ReadEventImpl : public ReadEvent {
   const EventID id;
 
   ReadEventImpl(std::shared_ptr<const ReadIR> read, std::shared_ptr<EventInfo> info, EventID id)
-      : info(std::move(info)), read(std::move(read)), id(id), accessedMemory({}) {
+      : info(std::move(info)), accessedMemory({}), read(std::move(read)), id(id) {
     this->info->thread.program.pta.getPointsTo(this->info->context, this->read->getAccessedValue(), accessedMemory);
   }
 
@@ -65,7 +65,7 @@ class WriteEventImpl : public WriteEvent {
   const EventID id;
 
   WriteEventImpl(std::shared_ptr<const WriteIR> write, std::shared_ptr<EventInfo> info, EventID id)
-      : info(std::move(info)), write(std::move(write)), id(id), accessedMemory({}) {
+      : info(std::move(info)), accessedMemory({}), write(std::move(write)), id(id) {
     this->info->thread.program.pta.getPointsTo(this->info->context, this->write->getAccessedValue(), accessedMemory);
   }
 
@@ -240,6 +240,48 @@ class ExternCallEventImpl : public ExternCallEvent {
   [[nodiscard]] const llvm::Function *getCalledFunction() const override {
     return call->getInst()->getCalledFunction();
   }
+};
+
+class EnterGuardEventImpl : public EnterGuardEvent {
+  std::shared_ptr<EventInfo> info;
+
+ public:
+  const size_t guardedTID;
+  const EventID id;
+
+  EnterGuardEventImpl(std::shared_ptr<EventInfo> info, ThreadID guardedTID, EventID id)
+      : info(std::move(info)), guardedTID(guardedTID), id(id) {}
+
+  [[nodiscard]] inline EventID getID() const override { return id; }
+  [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
+  [[nodiscard]] inline const ThreadTrace &getThread() const override { return info->thread; }
+  [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
+  [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
+  [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
+  [[nodiscard]] race::IR::Type getIRType() const { return race::IR::Type::None; }
+
+  [[nodiscard]] inline size_t getGuardedTID() const override { return guardedTID; }
+};
+
+class ExitGuardEventImpl : public ExitGuardEvent {
+  std::shared_ptr<EventInfo> info;
+
+ public:
+  const size_t guardedTID;
+  const EventID id;
+
+  ExitGuardEventImpl(std::shared_ptr<EventInfo> info, ThreadID guardedTID, EventID id)
+      : info(std::move(info)), guardedTID(guardedTID), id(id) {}
+
+  [[nodiscard]] inline EventID getID() const override { return id; }
+  [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
+  [[nodiscard]] inline const ThreadTrace &getThread() const override { return info->thread; }
+  [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
+  [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
+  [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
+  [[nodiscard]] race::IR::Type getIRType() const { return race::IR::Type::None; }
+
+  [[nodiscard]] inline size_t getGuardedTID() const override { return guardedTID; }
 };
 
 }  // namespace race

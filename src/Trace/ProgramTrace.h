@@ -62,6 +62,67 @@ struct OpenMPState {
 
   // List of unjoined OpenMP task threads
   std::vector<UnjoinedTask> unjoinedTasks;
+
+  // map of blocks to the tid they are guarded by omp_get_thread_num
+  // TODO: simple implementation can only handle one block being guarded
+  std::map<const llvm::BasicBlock *, ThreadID> guardedBlocks;
+
+  // set of omp_get_thread_num calls who's guarded blocks have already been computed
+  std::set<const llvm::Instruction *> visited;
+
+  // whether we call updateGuardedBlocks to check if reach any guarded block entry/exit
+  // update to true when see a compare IR after the call to omp_get_thread_num
+  bool checkGuardedBlock = false;
+
+  // Track the current guarded block and its thread ID if we are in any
+  const llvm::BasicBlock *curGuardedBlock = nullptr;
+  ThreadID guardedTID;  // this is not instantly updated with curGuardedBlock
+
+  // the result of checkGuardedBlocks
+  enum class GuardType {
+    NoGuard,
+    EnterGuard,
+    Guarding,
+    ExitGuard,
+  };
+
+  struct GuardResult {
+    GuardType typ;
+    std::optional<ThreadID> guardedTID;
+
+    GuardResult(GuardType typ, ThreadID guardedTID) : typ(typ), guardedTID(guardedTID) {}
+    GuardResult(GuardType typ) : typ(typ) {}
+  };
+
+  // check if we are entering/in/exiting any guarded blocks
+  GuardResult checkGuardedBlocks(const llvm::Instruction *inst, bool isEnd) {
+    // check if this is an exit
+    if (curGuardedBlock) {
+      if ((isEnd &&
+           inst->getParent() ==
+               curGuardedBlock)) {  // reach the end of basicblock/function, we close current guarded block if exists
+        curGuardedBlock = nullptr;
+        checkGuardedBlock = false;
+        return GuardResult(GuardType::ExitGuard, guardedTID);
+      } else {
+        return GuardResult(GuardType::Guarding);
+      }
+    }
+
+    if (isEnd) return GuardResult(GuardType::NoGuard);
+
+    // check if this is an entry
+    for (auto it = guardedBlocks.begin(); it != guardedBlocks.end(); it++) {
+      auto guardedBlock = it->first;
+      if (guardedBlock == inst->getParent()) {  // we enter a guarded block
+        curGuardedBlock = guardedBlock;
+        guardedTID = it->second;
+        return GuardResult(GuardType::EnterGuard, guardedTID);
+      }
+    }
+
+    return GuardResult(GuardType::NoGuard);
+  }
 };
 
 // all included states are ONLY used when building ProgramTrace/ThreadTrace

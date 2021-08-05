@@ -19,8 +19,7 @@ limitations under the License.
 using namespace race;
 using namespace llvm;
 
-OpenMPAnalysis::OpenMPAnalysis(const ProgramTrace &program)
-    : getThreadNumAnalysis(program), lastprivate(program.getModule()), arrayAnalysis() {
+OpenMPAnalysis::OpenMPAnalysis(const ProgramTrace &program) : lastprivate(program.getModule()), arrayAnalysis() {
   PB.registerFunctionAnalyses(FAM);
 }
 
@@ -307,16 +306,12 @@ bool OpenMPAnalysis::inSameReduce(const Event *event1, const Event *event2) cons
   return false;
 }
 
-#include "IR/IR.h"
-#include "Trace/ProgramTrace.h"
-#include "Trace/ThreadTrace.h"
-
 namespace {
 
 // Get any icmp_eq insts that use this value and compare against a constant integer
 // return list of pairs (cmp, c) where cmp is the cmpInst and c is the constant value compared against
-std::vector<std::pair<const llvm::CmpInst *, uint64_t>> getConstCmpEqInsts(const llvm::Value *value) {
-  std::vector<std::pair<const llvm::CmpInst *, uint64_t>> result;
+std::vector<std::pair<const llvm::CmpInst *, ThreadID>> getConstCmpEqInsts(const llvm::Value *value) {
+  std::vector<std::pair<const llvm::CmpInst *, ThreadID>> result;
 
   std::vector<const llvm::User *> worklist;
 
@@ -402,120 +397,77 @@ std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *bran
   return guardedBlocks;
 }
 
-bool canReachTarget(llvm::Function *fn, const llvm::Function *target);
+// Get list of (non-nested) event regions
+// template definition can be in cpp as long as we dont expose the template outside of this file
+template <Event::Type Start, Event::Type End>
+std::vector<Region> getRegions(const ThreadTrace &thread) {
+  std::vector<Region> regions;
 
-bool reach(const BasicBlock &basicblock, const llvm::Function *target) {
-  auto callsite = std::find_if(basicblock.begin(), basicblock.end(), [target](const llvm::Instruction &inst) {
-    auto call = llvm::dyn_cast<llvm::CallBase>(&inst);
-    return call ? call->getCalledFunction() == target || canReachTarget(call->getCalledFunction(), target) : false;
-  });
-  return callsite != basicblock.end();
+  std::optional<EventID> enter;
+  for (auto const &event : thread.getEvents()) {
+    switch (event->type) {
+      case Start: {
+        assert(!enter.has_value() && "encountered two enter types in a row");
+        enter = event->getID();
+        break;
+      }
+      case End: {
+        assert(enter.has_value() && "encountered exit type without a matching enter type");
+        regions.emplace_back(enter.value(), event->getID(), thread);
+        enter.reset();
+        break;
+      }
+      default:
+        // Nothing
+        break;
+    }
+  }
+  return regions;
 }
 
-// return true if fn can finally call target along its call chains
-bool canReachTarget(llvm::Function *fn, const llvm::Function *target) {
-  for (auto const &basicblock : fn->getBasicBlockList()) {
-    if (reach(basicblock, target)) return true;
+// Get the innermost region that contains event
+template <Event::Type Start, Event::Type End>
+std::optional<Region> getContainingRegion(const Event *event) {
+  if (!event) return std::nullopt;
+
+  auto const &thread = event->getThread();
+  auto const regions = getRegions<Start, End>(thread);
+
+  for (auto const &region : regions) {
+    if (region.contains(event->getID())) {
+      return region;
+    }
   }
+
+  return std::nullopt;
+}
+
+template <Event::Type Start, Event::Type End>
+bool inSame(const Event *event1, const Event *event2) {
+  auto const region1 = getContainingRegion<Start, End>(event1);
+  auto const region2 = getContainingRegion<Start, End>(event2);
+
+  if (!region1 || !region2) {
+    return false;
+  }
+
+  auto const getGuardedTID = [](Region r) {
+    return llvm::cast<EnterGuardEvent>(r.thread.getEvent(r.start))->getGuardedTID();
+  };
+
+  if (getGuardedTID(region1.value()) == getGuardedTID(region2.value())) {
+    return true;
+  }
+
   return false;
 }
 
-// return the guarded thread id if target can be reached when searching along the call chains
-// starting from the calls in guardedBlocks
-std::optional<u_int64_t> canReachTopDown(std::map<const BasicBlock *, u_int64_t> &guardedBlocks,
-                                         const llvm::Function *target) {
-  // assertion: threads of the same guarded block are identical (the part within the guarded block)
-  for (auto guardedBlock : guardedBlocks) {
-    auto bb = guardedBlock.first;
-    if (reach(*(bb), target)) return guardedBlock.second;
-  }
-
-  return std::nullopt;
-}
+auto const _inSameGuardedTID = inSame<Event::Type::GuardStart, Event::Type::GuardEnd>;
 
 }  // namespace
 
-void SimpleGetThreadNumAnalysis::computeGuardedBlocks(const Event *event) {
-  assert(event->getIRType() == IR::Type::OpenMPGetThreadNum);
-  auto const call = event->getInst();
-  // Check if we have already computed guardedBlocks for this omp_get_thread_num call
-  if (visited.find(call) != visited.end()) return;
-
-  // Find all cmpInsts that compare the omp_get_thread_num call to a const value
-  auto const cmpInsts = getConstCmpEqInsts(call);
-  for (auto const &pair : cmpInsts) {
-    auto const cmpInst = pair.first;
-    auto const tid = pair.second;
-
-    // Find all branches that use the result of the cmp inst
-    for (auto user : cmpInst->users()) {
-      auto branch = llvm::dyn_cast<llvm::BranchInst>(user);
-      if (branch == nullptr) continue;
-
-      // Find all the blocks guarded by this branch
-      auto guarded = getGuardedBlocks(branch);
-
-      // insert the blocks into the guardedBlocks map
-      for (auto const block : guarded) {
-        guardedBlocks[block] = tid;
-      }
-    }
-  }
-
-  // Mark this get_thread_num call as visited
-  visited.insert(call);
-}
-
-std::optional<u_int64_t> SimpleGetThreadNumAnalysis::computeGuardedFns(const llvm::Function *fn) {
-  auto guardedFn = cached.find(fn);
-  if (guardedFn->second == -1) {  // the cached result is no guard
-    return std::nullopt;
-  }
-  if (guardedFn != cached.end()) {  // return cached result
-    return guardedFn->second;
-  }
-
-  // check if event is from an interprocedure call from a guarded block
-  auto guardedTID = canReachTopDown(guardedBlocks, fn);
-  if (guardedTID.has_value()) {
-    auto tid = guardedTID.value();
-    cached[fn] = static_cast<int64_t>(tid);
-    return tid;
-  }
-
-  // fn does not have any guarded block
-  cached[fn] = -1;
-  return std::nullopt;
-}
-
-std::optional<u_int64_t> SimpleGetThreadNumAnalysis::getGuardedBy(const Event *event) {
-  // check if this event's block is guarded
-  auto bb = event->getInst()->getParent();
-  auto guarded = guardedBlocks.find(bb);
-  if (guarded == guardedBlocks.end()) {
-    return computeGuardedFns(bb->getParent());
-  }
-  return guarded->second;
-}
-
-SimpleGetThreadNumAnalysis::SimpleGetThreadNumAnalysis(const ProgramTrace &program) {
-  for (auto const &thread : program.getThreads()) {
-    for (auto const &event : thread->getEvents()) {
-      // Only care about get_thread_num calls
-      if (event->getIRType() != IR::Type::OpenMPGetThreadNum) continue;
-      computeGuardedBlocks(event.get());
-    }
-  }
-}
-
-bool SimpleGetThreadNumAnalysis::guardedBySameTid(const Event *event1, const Event *event2) {
-  auto tid1 = getGuardedBy(event1);
-  if (!tid1.has_value()) return false;
-
-  auto tid2 = getGuardedBy(event2);
-  if (!tid2.has_value()) return false;
-
-  return tid1.value() == tid2.value();
+bool OpenMPAnalysis::inSameGuardedTID(const Event *event1, const Event *event2) const {
+  return _inSameGuardedTID(event1, event2);
 }
 
 std::set<const llvm::BasicBlock *> LastprivateAnalysis::computeLastprivateBlocks(const llvm::Function &func) {
@@ -576,7 +528,9 @@ bool OpenMPAnalysis::insideCompatibleSections(const Event *event1, const Event *
   std::vector<const Event *> sections;
   auto lastID = std::max(event1->getID(), event2->getID());
   for (auto &event : event1->getThread().getEvents()) {
-    auto block = event->getInst()->getParent();
+    auto ir = event->getInst();
+    if (!ir) continue;
+    auto block = ir->getParent();
     if ((sections.empty() || block != sections.back()->getInst()->getParent()) && block->hasName() &&
         block->getName().startswith(".omp.sections.case")) {  // add for body check
       sections.push_back(event.get());
