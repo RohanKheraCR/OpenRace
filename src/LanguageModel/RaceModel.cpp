@@ -15,6 +15,8 @@ limitations under the License.
 #include "LanguageModel/OpenMP.h"
 #include "LanguageModel/pthread.h"
 
+extern llvm::cl::opt<bool> DEBUG;
+
 using namespace pta;
 
 RaceModel::RaceModel(llvm::Module *M, llvm::StringRef entry) : Super(M, entry) {
@@ -118,7 +120,7 @@ bool RaceModel::isCompatible(const llvm::Instruction *callsite, const llvm::Func
   auto threadCreate = call->getCalledFunction();
   assert(threadCreate && "Indirect call should point to a function.");
 
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     threadCreate->print(llvm::outs());
     llvm::outs() << "\n";
     target->print(llvm::outs());

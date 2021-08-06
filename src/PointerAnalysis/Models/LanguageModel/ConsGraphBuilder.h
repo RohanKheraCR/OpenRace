@@ -192,6 +192,10 @@ class ConsGraphBuilder : public llvm::CtxInstVisitor<ctx, SubClass>, public PtrN
         if (auto objNode = llvm::cast<ObjNode>(node)) {
           auto object = objNode->getObject();
           if (object->isFunction()) {
+            if (DEBUG_PTA) {
+              llvm::outs() << "fnobj: " << object << "\n";
+            }
+
             // resolved to a function
             // JEFF: WHY A funPtrNode can have SO MANY indirect nodes?
             for (CallGraphNode<ctx> *indirectNode : funPtrNode->getIndirectNodes()) {
@@ -200,6 +204,11 @@ class ConsGraphBuilder : public llvm::CtxInstVisitor<ctx, SubClass>, public PtrN
               const llvm::Function *target = llvm::dyn_cast<llvm::Function>(object->getValue());
               auto callsite = indirectNode->getTargetFunPtr()->getCallSite();
               assert(target);
+
+              if (DEBUG_PTA) {
+                llvm::outs() << "Fn: " << *target << "\n"
+                             << " - callsite: " << callsite << "\n";
+              }
 
               if (indirectNode->getTargetFunPtr()->isInterceptedCallSite()) {
                 if (!static_cast<SubClass &>(*this).isCompatible(callsite, target)) {

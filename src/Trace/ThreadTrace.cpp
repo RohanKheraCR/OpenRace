@@ -17,6 +17,8 @@ limitations under the License.
 #include "Trace/CallStack.h"
 #include "Trace/ProgramTrace.h"
 
+extern llvm::cl::opt<bool> DEBUG;
+
 using namespace race;
 
 namespace {
@@ -200,7 +202,7 @@ void traverseCallNode(const pta::CallGraphNodeTy *node, const ThreadTrace &threa
 
   callstack.push(func);
 
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     llvm::outs() << "\nGenerating Func Sum: TID: " << thread.id << " Func: " << func->getName() << "\n";
   }
 

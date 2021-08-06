@@ -22,7 +22,7 @@ limitations under the License.
 
 using namespace race;
 
-extern llvm::cl::opt<bool> DEBUG_PTA;
+extern llvm::cl::opt<bool> DEBUG;
 
 namespace {
 
@@ -75,7 +75,7 @@ std::shared_ptr<const FunctionSummary> generateFunctionSummary(const llvm::Funct
     for (auto it = basicblock.begin(), end = basicblock.end(); it != end; ++it) {
       auto inst = llvm::cast<llvm::Instruction>(it);
 
-      if (DEBUG_PTA) {
+      if (DEBUG) {
         inst->print(llvm::outs(), false);
         llvm::outs() << "\n";
       }

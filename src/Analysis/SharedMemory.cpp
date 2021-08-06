@@ -10,6 +10,9 @@ limitations under the License.
 ==============================================================================*/
 
 #include "Analysis/SharedMemory.h"
+
+extern llvm::cl::opt<bool> DEBUG;
+
 using namespace race;
 
 SharedMemory::SharedMemory(const ProgramTrace &program) {
@@ -24,13 +27,13 @@ SharedMemory::SharedMemory(const ProgramTrace &program) {
     return id;
   };
 
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     llvm::outs() << "** SharedMemory **"
                  << "\n";
   }
   for (auto const &thread : program.getThreads()) {
     auto const tid = thread->id;
-    if (DEBUG_PTA) {
+    if (DEBUG) {
       llvm::outs() << "------- tid: " << tid << "\n";
     }
 
@@ -39,7 +42,7 @@ SharedMemory::SharedMemory(const ProgramTrace &program) {
         case Event::Type::Read: {
           auto readEvent = llvm::cast<ReadEvent>(event.get());
           auto const ptsTo = readEvent->getAccessedMemory();
-          if (DEBUG_PTA) {
+          if (DEBUG) {
             if (ptsTo.empty()) {
               llvm::outs() << "Read: ID " << readEvent->getID();
               readEvent->getIRInst()->getInst()->print(llvm::outs());
@@ -56,11 +59,11 @@ SharedMemory::SharedMemory(const ProgramTrace &program) {
           for (auto obj : ptsTo) {
             auto &reads = objReads[getObjId(obj)][tid];
             reads.push_back(readEvent);
-            if (DEBUG_PTA) {
+            if (DEBUG) {
               llvm::outs() << obj->getValue() << " " << obj->getObjectID() << " " << getObjId(obj) << ", ";
             }
           }
-          if (DEBUG_PTA) {
+          if (DEBUG) {
             llvm::outs() << "\n";
           }
           break;
@@ -68,7 +71,7 @@ SharedMemory::SharedMemory(const ProgramTrace &program) {
         case Event::Type::Write: {
           auto writeEvent = llvm::cast<WriteEvent>(event.get());
           auto const ptsTo = writeEvent->getAccessedMemory();
-          if (DEBUG_PTA) {
+          if (DEBUG) {
             if (ptsTo.empty()) {
               llvm::outs() << "Write: ID " << writeEvent->getID();
               writeEvent->getIRInst()->getInst()->print(llvm::outs());
@@ -85,11 +88,11 @@ SharedMemory::SharedMemory(const ProgramTrace &program) {
           for (auto obj : ptsTo) {
             auto &writes = objWrites[getObjId(obj)][tid];
             writes.push_back(writeEvent);
-            if (DEBUG_PTA) {
+            if (DEBUG) {
               llvm::outs() << obj->getValue() << " " << obj->getObjectID() << " " << getObjId(obj) << ", ";
             }
           }
-          if (DEBUG_PTA) {
+          if (DEBUG) {
             llvm::outs() << "\n";
           }
           break;

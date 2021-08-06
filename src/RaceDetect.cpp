@@ -20,6 +20,8 @@ limitations under the License.
 #include "LanguageModel/RaceModel.h"
 #include "Trace/ProgramTrace.h"
 
+extern llvm::cl::opt<bool> DEBUG;
+
 using namespace race;
 
 Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
@@ -58,7 +60,7 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
 
   // Adds to report if race is detected between write and other
   auto checkRace = [&](const race::WriteEvent *write, const race::MemAccessEvent *other) {
-    if (DEBUG_PTA) {
+    if (DEBUG) {
       llvm::outs() << "Checking Race: " << write->getID() << "(TID " << write->getThread().id << ") "
                    << "(line" << write->getIRInst()->getInst()->getDebugLoc().getLine()  // DRB149 crash on this line
                    << " col" << write->getIRInst()->getInst()->getDebugLoc().getCol() << ")"
@@ -110,7 +112,7 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
     // Race detected
     reporter.collect(write, other);
 
-    if (DEBUG_PTA) {
+    if (DEBUG) {
       llvm::outs() << " ... is race\n";
     }
   };
@@ -144,11 +146,11 @@ Report race::detectRaces(llvm::Module *module, DetectRaceConfig config) {
     }
   }
 
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     happensbefore.debugDump(llvm::outs());
   }
 
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     happensbefore.debugDump(llvm::outs());
   }
 

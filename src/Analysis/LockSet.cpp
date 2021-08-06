@@ -13,6 +13,8 @@ limitations under the License.
 
 #include <set>
 
+extern llvm::cl::opt<bool> DEBUG;
+
 using namespace race;
 
 std::multiset<const llvm::Value *> LockSet::heldLocks(const Event *targetEvent) {
@@ -22,7 +24,7 @@ std::multiset<const llvm::Value *> LockSet::heldLocks(const Event *targetEvent) 
     return it->second;
   }
   std::multiset<const llvm::Value *> locks;
-  if (DEBUG_PTA) {
+  if (DEBUG) {
     llvm::outs() << "--------------------------\n";
   }
   auto const &thread = targetEvent->getThread();
@@ -34,7 +36,7 @@ std::multiset<const llvm::Value *> LockSet::heldLocks(const Event *targetEvent) 
       case Event::Type::Lock: {
         auto lockEvent = llvm::cast<LockEvent>(event.get());
         locks.insert(lockEvent->getIRInst()->getLockValue());
-        if (DEBUG_PTA) {
+        if (DEBUG) {
           llvm::outs() << "After lock: {";
           auto it = locks.begin();
           for (; it != locks.end(); it++) llvm::outs() << *it << " ";
@@ -49,7 +51,7 @@ std::multiset<const llvm::Value *> LockSet::heldLocks(const Event *targetEvent) 
         if (first != locks.end()) {  // only remove the first element
           locks.erase(first);
         }
-        if (DEBUG_PTA) {
+        if (DEBUG) {
           llvm::outs() << "After unlock: {";
           auto it = locks.begin();
           for (; it != locks.end(); it++) llvm::outs() << *it << " ";
