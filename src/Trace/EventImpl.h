@@ -45,7 +45,7 @@ class ReadEventImpl : public ReadEvent {
 
   ReadEventImpl(std::shared_ptr<const ReadIR> read, std::shared_ptr<EventInfo> info, EventID id)
       : info(std::move(info)), accessedMemory({}), read(std::move(read)), id(id) {
-    this->info->thread.program.pta.getPointsTo(this->info->context, this->read->getAccessedValue(), accessedMemory);
+    this->info->thread->program.pta.getPointsTo(this->info->context, this->read->getAccessedValue(), accessedMemory);
   }
 
   [[nodiscard]] inline EventID getID() const override { return id; }
@@ -66,7 +66,7 @@ class WriteEventImpl : public WriteEvent {
 
   WriteEventImpl(std::shared_ptr<const WriteIR> write, std::shared_ptr<EventInfo> info, EventID id)
       : info(std::move(info)), accessedMemory({}), write(std::move(write)), id(id) {
-    this->info->thread.program.pta.getPointsTo(this->info->context, this->write->getAccessedValue(), accessedMemory);
+    this->info->thread->program.pta.getPointsTo(this->info->context, this->write->getAccessedValue(), accessedMemory);
   }
 
   [[nodiscard]] inline EventID getID() const override { return id; }
@@ -254,7 +254,7 @@ class EnterGuardEventImpl : public EnterGuardEvent {
 
   [[nodiscard]] inline EventID getID() const override { return id; }
   [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
-  [[nodiscard]] inline const ThreadTrace &getThread() const override { return info->thread; }
+  [[nodiscard]] inline const ThreadTrace &getThread() const override { return *info->thread; }
   [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
   [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
   [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
@@ -275,7 +275,7 @@ class ExitGuardEventImpl : public ExitGuardEvent {
 
   [[nodiscard]] inline EventID getID() const override { return id; }
   [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
-  [[nodiscard]] inline const ThreadTrace &getThread() const override { return info->thread; }
+  [[nodiscard]] inline const ThreadTrace &getThread() const override { return *info->thread; }
   [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
   [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
   [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
