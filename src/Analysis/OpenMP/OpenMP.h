@@ -19,7 +19,15 @@ limitations under the License.
 
 namespace race {
 
+// Get any icmp_eq insts that use this value and compare against a constant integer
+// return list of pairs (cmp, c) where cmp is the cmpInst and c is the constant value compared against
 std::vector<std::pair<const llvm::CmpInst *, ThreadID>> getConstCmpEqInsts(const llvm::Value *value);
+
+// Get list of blocks guarded by one case of this branch.
+// branch arg decides if checking for blocks guarded by true or false branch
+// Start by assuming the target block is guarded
+// Iterate from the target block until we find a block that has an unguarded predecessor
+// Cannot handle loops
 std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch = true);
 
 }  // namespace race
