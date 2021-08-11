@@ -24,7 +24,7 @@ using EventID = size_t;
 
 class Event {
  public:
-  enum class Type { Read, Write, Fork, Join, Lock, Unlock, Barrier, Call, CallEnd, ExternCall, GuardStart, GuardEnd };
+  enum class Type { Read, Write, Fork, Join, Lock, Unlock, Barrier, Call, CallEnd, ExternCall };
 
   const Type type;
 
@@ -41,9 +41,7 @@ class Event {
   [[nodiscard]] virtual const race::IR *getIRInst() const = 0;
   [[nodiscard]] virtual const llvm::Instruction *getInst() const { return getIRInst()->getInst(); }
   [[nodiscard]] const llvm::Function *getFunction() const { return getInst()->getFunction(); }
-  [[nodiscard]] race::IR::Type getIRType() const {
-    return getInst() == nullptr ? race::IR::Type::None : getIRInst()->type;
-  }
+  [[nodiscard]] race::IR::Type getIRType() const { return getIRInst()->type; }
 
  protected:
   explicit Event(Type type) : type(type) {}
@@ -192,32 +190,6 @@ class ExternCallEvent : public Event {
 
   // Used for llvm style RTTI (isa, dyn_cast, etc.)
   [[nodiscard]] static inline bool classof(const Event *e) { return e->type == Type::ExternCall; }
-};
-
-// the following events do not have a specific ir or llvm::Instruction or llvm::Function
-// just a mark of the start and end of a specific event
-class EnterGuardEvent : public Event {
- protected:
-  EnterGuardEvent() : Event(Type::GuardStart) {}
-
- public:
-  [[nodiscard]] inline const race::IR *getIRInst() const override = 0;
-  [[nodiscard]] virtual size_t getGuardedTID() const = 0;
-
-  // Used for llvm style RTTI (isa, dyn_cast, etc.)
-  [[nodiscard]] static inline bool classof(const Event *e) { return e->type == Type::GuardStart; }
-};
-
-class ExitGuardEvent : public Event {
- protected:
-  ExitGuardEvent() : Event(Type::GuardEnd) {}
-
- public:
-  [[nodiscard]] inline const race::IR *getIRInst() const override = 0;
-  [[nodiscard]] virtual size_t getGuardedTID() const = 0;
-
-  // Used for llvm style RTTI (isa, dyn_cast, etc.)
-  [[nodiscard]] static inline bool classof(const Event *e) { return e->type == Type::GuardEnd; }
 };
 
 }  // namespace race

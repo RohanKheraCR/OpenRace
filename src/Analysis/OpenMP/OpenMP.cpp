@@ -52,7 +52,7 @@ std::vector<std::pair<const llvm::CmpInst *, ThreadID>> race::getConstCmpEqInsts
   return result;
 }
 
-std::set<const llvm::BasicBlock *> race::getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch) {
+std::set<llvm::BasicBlock *> race::getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch) {
   // This branch should use a cmp eq instruction
   // Otherwise the true/false blocks below may be wrong
   assert(llvm::isa<llvm::CmpInst>(branchInst->getOperand(0)));
@@ -61,25 +61,25 @@ std::set<const llvm::BasicBlock *> race::getGuardedBlocks(const llvm::BranchInst
   auto trueBlock = llvm::cast<llvm::BasicBlock>(branchInst->getOperand(2));
   auto falseBlock = llvm::cast<llvm::BasicBlock>(branchInst->getOperand(1));
 
-  auto const targetBlock = (branch) ? trueBlock : falseBlock;
+  auto targetBlock = (branch) ? trueBlock : falseBlock;
 
   // This will be the returned result
-  std::set<const llvm::BasicBlock *> guardedBlocks;
+  std::set<llvm::BasicBlock *> guardedBlocks;
   guardedBlocks.insert(targetBlock);
 
-  std::set<const llvm::BasicBlock *> visited;
-  std::vector<const llvm::BasicBlock *> worklist;
+  std::set<llvm::BasicBlock *> visited;
+  std::vector<llvm::BasicBlock *> worklist;
 
   visited.insert(targetBlock);
   std::copy(succ_begin(targetBlock), succ_end(targetBlock), std::back_inserter(worklist));
 
   do {
-    auto const currentBlock = worklist.back();
+    auto currentBlock = worklist.back();
     worklist.pop_back();
 
     auto hasUnguardedPred = std::any_of(
         pred_begin(currentBlock), pred_end(currentBlock),
-        [&guardedBlocks](const llvm::BasicBlock *pred) { return guardedBlocks.find(pred) == guardedBlocks.end(); });
+        [&guardedBlocks](llvm::BasicBlock *pred) { return guardedBlocks.find(pred) == guardedBlocks.end(); });
 
     if (hasUnguardedPred) continue;
     visited.insert(currentBlock);

@@ -149,7 +149,44 @@ bool inSame(const Event *event1, const Event *event2) {
   return false;
 }
 
+// return true if both events are inside of the region marked by Start and End
+// AND they share the same guarded TID
+template <IR::Type Start, IR::Type End>
+bool haveSameTID(const Event *event1, const Event *event2) {
+  assert(_fromSameParallelRegion(event1, event2) && "events must be from same omp parallel region");
+
+  // get omp region contains the event
+  auto const region1 = getContainingRegion<Start, End>(event1);
+  auto const region2 = getContainingRegion<Start, End>(event2);
+
+  if (!region1 || !region2) {
+    return false;
+  }
+
+  auto const getGuardedTID = [](Region r, EventID id) {
+    auto guardCall = llvm::cast<llvm::CallInst>(r.thread.getEvent(id)->getInst());
+    auto guardedTID = llvm::cast<llvm::ConstantInt>(guardCall->getArgOperand(0));
+    return guardedTID->getZExtValue();
+  };
+
+  auto const sameGuardedTID = [&getGuardedTID](Region r) {
+    return getGuardedTID(r, r.start) == getGuardedTID(r, r.end);
+  };
+
+  // regions do not need to be the same (i.e., sameAs), but must have the same guarded TID passed as the only parameter
+  // to four call to omp_get_thread_num_guard_start and omp_get_thread_num_guard_end from two regions
+  if (sameGuardedTID(region1.value()) && sameGuardedTID(region2.value()) &&
+      getGuardedTID(region1.value(), region1.value().start) == getGuardedTID(region2.value(), region2.value().start)) {
+    return true;
+  }
+
+  return false;
+}
+
 auto const _inSameSingleBlock = inSame<IR::Type::OpenMPSingleStart, IR::Type::OpenMPSingleEnd>;
+
+auto const _inSameGuardedTID =
+    haveSameTID<IR::Type::OpenMPGetThreadNumGuardStart, IR::Type::OpenMPGetThreadNumGuardEnd>;
 
 }  // namespace
 
@@ -189,6 +226,10 @@ bool OpenMPAnalysis::fromSameParallelRegion(const Event *event1, const Event *ev
 
 bool OpenMPAnalysis::inSameSingleBlock(const Event *event1, const Event *event2) const {
   return _inSameSingleBlock(event1, event2);
+}
+
+bool OpenMPAnalysis::inSameGuardedTID(const Event *event1, const Event *event2) const {
+  return _inSameGuardedTID(event1, event2);
 }
 
 std::vector<const llvm::BasicBlock *> &ReduceAnalysis::computeGuardedBlocks(ReduceInst reduce) const {
@@ -305,81 +346,6 @@ bool OpenMPAnalysis::inSameReduce(const Event *event1, const Event *event2) cons
   }
 
   return false;
-}
-
-namespace {
-
-// Get list of (non-nested) event regions
-// template definition can be in cpp as long as we dont expose the template outside of this file
-template <Event::Type Start, Event::Type End>
-std::vector<Region> getRegions(const ThreadTrace &thread) {
-  std::vector<Region> regions;
-
-  std::optional<EventID> enter;
-  for (auto const &event : thread.getEvents()) {
-    switch (event->type) {
-      case Start: {
-        assert(!enter.has_value() && "encountered two enter types in a row");
-        enter = event->getID();
-        break;
-      }
-      case End: {
-        assert(enter.has_value() && "encountered exit type without a matching enter type");
-        regions.emplace_back(enter.value(), event->getID(), thread);
-        enter.reset();
-        break;
-      }
-      default:
-        // Nothing
-        break;
-    }
-  }
-  return regions;
-}
-
-// Get the only region that contains event
-template <Event::Type Start, Event::Type End>
-std::optional<Region> getContainingRegion(const Event *event) {
-  if (!event) return std::nullopt;
-
-  auto const &thread = event->getThread();
-  auto const regions = getRegions<Start, End>(thread);
-
-  for (auto const &region : regions) {
-    if (region.contains(event->getID())) {
-      return region;
-    }
-  }
-
-  return std::nullopt;
-}
-
-template <Event::Type Start, Event::Type End>
-bool inSame(const Event *event1, const Event *event2) {
-  auto const region1 = getContainingRegion<Start, End>(event1);
-  auto const region2 = getContainingRegion<Start, End>(event2);
-
-  if (!region1 || !region2) {
-    return false;
-  }
-
-  auto const getGuardedTID = [](Region r) {
-    return llvm::cast<EnterGuardEvent>(r.thread.getEvent(r.start))->getGuardedTID();
-  };
-
-  if (getGuardedTID(region1.value()) == getGuardedTID(region2.value())) {
-    return true;
-  }
-
-  return false;
-}
-
-auto const _inSameGuardedTID = inSame<Event::Type::GuardStart, Event::Type::GuardEnd>;
-
-}  // namespace
-
-bool OpenMPAnalysis::inSameGuardedTID(const Event *event1, const Event *event2) const {
-  return _inSameGuardedTID(event1, event2);
 }
 
 std::set<const llvm::BasicBlock *> LastprivateAnalysis::computeLastprivateBlocks(const llvm::Function &func) {

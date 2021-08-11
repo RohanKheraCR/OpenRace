@@ -110,4 +110,11 @@ inline bool isDebugOutlined(const llvm::StringRef& funcName) { return funcName.s
 
 inline bool isGetThreadNum(const llvm::StringRef& funcName) { return funcName.equals("omp_get_thread_num"); }
 
+inline bool isGetThreadNumGuardStart(const llvm::StringRef& funcName) {
+  return funcName.equals("omp_get_thread_num_guard_start");
+}
+inline bool isGetThreadNumGuardEnd(const llvm::StringRef& funcName) {
+  return funcName.equals("omp_get_thread_num_guard_end");
+}
+
 }  // namespace OpenMPModel

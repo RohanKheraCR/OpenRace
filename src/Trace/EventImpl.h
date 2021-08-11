@@ -242,46 +242,4 @@ class ExternCallEventImpl : public ExternCallEvent {
   }
 };
 
-class EnterGuardEventImpl : public EnterGuardEvent {
-  std::shared_ptr<EventInfo> info;
-
- public:
-  const size_t guardedTID;
-  const EventID id;
-
-  EnterGuardEventImpl(std::shared_ptr<EventInfo> info, ThreadID guardedTID, EventID id)
-      : info(std::move(info)), guardedTID(guardedTID), id(id) {}
-
-  [[nodiscard]] inline EventID getID() const override { return id; }
-  [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
-  [[nodiscard]] inline const ThreadTrace &getThread() const override { return *info->thread; }
-  [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
-  [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
-  [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
-  [[nodiscard]] race::IR::Type getIRType() const { return race::IR::Type::None; }
-
-  [[nodiscard]] inline size_t getGuardedTID() const override { return guardedTID; }
-};
-
-class ExitGuardEventImpl : public ExitGuardEvent {
-  std::shared_ptr<EventInfo> info;
-
- public:
-  const size_t guardedTID;
-  const EventID id;
-
-  ExitGuardEventImpl(std::shared_ptr<EventInfo> info, ThreadID guardedTID, EventID id)
-      : info(std::move(info)), guardedTID(guardedTID), id(id) {}
-
-  [[nodiscard]] inline EventID getID() const override { return id; }
-  [[nodiscard]] inline const pta::ctx *getContext() const override { return info->context; }
-  [[nodiscard]] inline const ThreadTrace &getThread() const override { return *info->thread; }
-  [[nodiscard]] inline const race::IR *getIRInst() const override { return nullptr; }
-  [[nodiscard]] const llvm::Instruction *getInst() const override { return nullptr; }
-  [[nodiscard]] const llvm::Function *getFunction() const { return nullptr; }
-  [[nodiscard]] race::IR::Type getIRType() const { return race::IR::Type::None; }
-
-  [[nodiscard]] inline size_t getGuardedTID() const override { return guardedTID; }
-};
-
 }  // namespace race

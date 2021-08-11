@@ -28,6 +28,6 @@ std::vector<std::pair<const llvm::CmpInst *, ThreadID>> getConstCmpEqInsts(const
 // Start by assuming the target block is guarded
 // Iterate from the target block until we find a block that has an unguarded predecessor
 // Cannot handle loops
-std::set<const llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch = true);
+std::set<llvm::BasicBlock *> getGuardedBlocks(const llvm::BranchInst *branchInst, bool branch = true);
 
 }  // namespace race

@@ -96,7 +96,7 @@ TEST_LL("task-single-yes", "task-single-yes.ll", EXPECTED("task-single-yes.c:15:
 TEST_LL("task-master-single-yes", "task-master-single-yes.ll",
         EXPECTED("task-master-single-yes.c:18:14 task-master-single-yes.c:14:16",
                  "task-master-single-yes.c:14:16 task-master-single-yes.c:18:14"))
-TEST_LL("task-tid-no", "task-tid-no.ll", EXPECTED("task-tid-no.c:15:16 task-tid-no.c:15:16"))
+TEST_LL("task-tid-no", "task-tid-no.ll", NORACE)
 TEST_LL("task-yes", "task-yes.ll", EXPECTED("task-yes.c:13:14 task-yes.c:13:14"))
 
 // threadlocal
