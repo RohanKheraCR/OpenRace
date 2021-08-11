@@ -54,12 +54,6 @@ llvm::raw_ostream &race::operator<<(llvm::raw_ostream &os, const Event::Type &ty
     case Event::Type::ExternCall:
       os << "ExternCall";
       break;
-    case Event::Type::GuardStart:
-      os << "GuardStart";
-      break;
-    case Event::Type::GuardEnd:
-      os << "GuardEnd";
-      break;
     default:
       llvm_unreachable("Did you forget to update Event::Type operator<< ?");
   }
